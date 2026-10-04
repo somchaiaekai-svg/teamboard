@@ -346,12 +346,33 @@ function currentPhase(t){
   const i=ph.findIndex(p=>!phaseResult(t,p).done);
   return i<0?{all:true,n:ph.length}:{i,p:ph[i],n:ph.length,res:phaseResult(t,ph[i]),pct:phasePct(t,ph[i])};
 }
+// Project budget = task budget, or the sum of phase budgets when the task has none.
+function projBudget(t){return Number(t.budget)||phasesOf(t).reduce((a,p)=>a+(Number(p.budget)||0),0);}
+// Project budget left after a report, counting every payment recorded up to it (all phases, by record time).
+function balanceAfter(r){
+  const t=S.tasks[r.taskId];if(!t)return null;const b=projBudget(t);if(!b)return null;
+  const key=x=>[x.createdAt||0,x.date||''];const k=key(r);
+  const used=Object.values(S.reports).filter(x=>x.taskId===r.taskId&&((x.createdAt||0)<k[0]||((x.createdAt||0)===k[0]&&(x.date||'')<=k[1]))).reduce((a,x)=>a+(Number(x.spent)||0),0);
+  return b-used;
+}
+// Project budget left once this phase and the ones before it are counted.
+function balanceAfterPhase(t,p){
+  const b=projBudget(t);if(!b)return null;const ph=phasesOf(t);const i=ph.findIndex(x=>x.id===p.id);
+  return b-ph.slice(0,i+1).reduce((a,x)=>a+spentOf(t.id,x.id),0);
+}
+function phaseBudgetLine(t,p){
+  const b=Number(p.budget)||0,x=spentOf(t.id,p.id),pb=projBudget(t),left=balanceAfterPhase(t,p);
+  return h('div',{class:'budgetline'},
+    h('span',null,'งบเฟสนี้ ',h('b',{text:b?baht(b):'ยังไม่กำหนด'}),b?' บาท':''),
+    h('span',{class:b&&x>b?'over':''},'จ่ายในเฟสนี้ ',h('b',{text:baht(x)}),' บาท'+(b?' ('+Math.round(x*100/b)+'%)':'')),
+    left!==null?h('span',{class:left<0?'over':''},'งบโครงการคงเหลือ ',h('b',{text:baht(left)}),' บาท',h('span',{class:'stamp',text:' (งบรวม '+baht(pb)+' − จ่ายสะสมถึงเฟสนี้ '+baht(pb-left)+')'})):h('span',{class:'stamp',text:'ยังไม่ได้กำหนดงบประมาณรวมของโครงการ'}));
+}
 function budgetLine(b,x,label){
   const left=b-x;
   return h('div',{class:'budgetline'},
     h('span',null,label+' ',h('b',{text:b?baht(b):'ยังไม่กำหนด'}),b?' บาท':''),
-    h('span',null,'เบิกจ่ายแล้ว ',h('b',{text:baht(x)}),' บาท'+(b?' ('+Math.round(x*100/b)+'%)':'')),
-    b?h('span',{class:left<0?'over':''},left<0?'เกินงบ ':'คงเหลือ ',h('b',{text:baht(Math.abs(left))}),' บาท'):null,
+    h('span',null,'จ่ายแล้วทุกเฟส ',h('b',{text:baht(x)}),' บาท'+(b?' ('+Math.round(x*100/b)+'%)':'')),
+    b?h('span',{class:left<0?'over':''},left<0?'เกินงบ ':'งบคงเหลือ ',h('b',{text:baht(Math.abs(left))}),' บาท'):null,
     b?h('div',{class:'progress'+(left<0?' bad':''),title:'สัดส่วนเบิกจ่าย'},h('i',{style:'width:'+Math.min(100,Math.round(x*100/b))+'%'})):null);
 }
 const planChip=t=>{const ps=planStatus(t);return h('span',{class:'chip '+ps.cls,title:ps.reasons.join('\n')||null,text:ps.text});};
@@ -675,7 +696,7 @@ function fileLinks(r){
 }
 function reportTable(reports,showTask,hidePhase){
   if(!reports.length)return h('div',{class:'empty-col',text:'ยังไม่มีรายงานความก้าวหน้า'});
-  const heads=['วันที่รายงาน',...(showTask?['งาน','ผู้รับผิดชอบ']:[]),...(hidePhase?[]:['เฟส/งานย่อย']),'ความก้าวหน้า','จ่ายเงิน (บาท)','รายละเอียดผลการดำเนินงาน','ปัญหา/อุปสรรค','เอกสารแนบ',''];
+  const heads=['วันที่รายงาน',...(showTask?['งาน','ผู้รับผิดชอบ']:[]),...(hidePhase?[]:['เฟส/งานย่อย']),'ความก้าวหน้า','จ่ายเงิน (บาท)','งบโครงการคงเหลือ (บาท)','รายละเอียดผลการดำเนินงาน','ปัญหา/อุปสรรค','เอกสารแนบ',''];
   return h('div',{class:'tablewrap'},h('table',{class:'wide'},
     h('thead',null,h('tr',null,heads.map(x=>h('th',{text:x})))),
     h('tbody',null,reports.map(r=>{
@@ -688,6 +709,7 @@ function reportTable(reports,showTask,hidePhase){
         hidePhase?null:h('td',{text:ph?ph.name+' ('+ph.weight+'%)':(r.phaseId?'(เฟสถูกลบ)':'ทั้งงาน')}),
         h('td',{style:'min-width:110px'},h('div',{class:'pct'},bar(clampPct(r.percent)),h('span',{class:'num',text:clampPct(r.percent)+'%'}))),
         h('td',{class:'num right',text:r.spent?baht(r.spent):'—'}),
+        (()=>{const bl=balanceAfter(r);return h('td',{class:'num right'+(bl!==null&&bl<0?' issue':''),text:bl===null?'—':baht(bl)});})(),
         h('td',{class:'pre',text:r.detail||'—'}),
         h('td',{class:'pre'+(r.issues?' issue':''),text:r.issues||'—'}),
         h('td',null,fileLinks(r)),
@@ -717,7 +739,7 @@ function phaseSections(t,opts){
         p?h('label',{class:'donebox',title:'ติ๊กเมื่อเฟสนี้แล้วเสร็จ'},h('input',{type:'checkbox',checked:!!p.done,disabled:!S.canWrite,onchange:e=>togglePhaseDone(t.id,p.id,e.target.checked)}),'แล้วเสร็จ'):null,
         h('div',{class:'pct phase-pct'},bar(pc),h('span',{class:'num',text:pc+'%'})),
         opts.addBtn&&S.canWrite?h('button',{class:'btn small',type:'button',text:'+ รายงานเฟสนี้',onclick:()=>{const sel=document.getElementById('rp-phase');if(sel){sel.value=p?p.id:'';sel.dispatchEvent(new Event('change'));}const f=document.querySelector('.repform');if(f){f.scrollIntoView({behavior:'smooth',block:'start'});const d=document.getElementById('rp-detail');if(d)setTimeout(()=>d.focus(),300);}}}):null),
-      p?budgetLine(Number(p.budget)||0,spentOf(t.id,p.id),'งบประมาณเฟสนี้'):null,
+      p?phaseBudgetLine(t,p):null,
       h('div',{class:'docs'},h('span',{class:'stamp',text:(p?'เอกสารของเฟสนี้':'เอกสาร')+' ('+docs.length+'):'}),
         docs.length?docs.map(d=>d.f?h('a',{href:'#',class:'file',text:'📎 '+(d.f.name||'ไฟล์แนบ')+' · '+fmtDate(d.date),onclick:e=>{e.preventDefault();if(sb&&d.f.path)openFile(d.f);}}):h('a',{href:d.link,target:'_blank',rel:'noopener noreferrer',class:'file',text:'🔗 ลิงก์เอกสาร · '+fmtDate(d.date)})):h('span',{class:'stamp',text:'ยังไม่มี'})),
       reps.length?reportTable(reps,false,true):h('div',{class:'stamp',text:p?'ยังไม่มีรายงานของเฟสนี้':'ยังไม่มีรายงาน'}));
@@ -817,19 +839,19 @@ function taskReportHtml(t,links){
   const pc=taskPct(t);const ph=phasesOf(t);const reps=reportsFor(t.id);
   const byRec=(a,b)=>(a.createdAt||0)-(b.createdAt||0)||(a.date||'').localeCompare(b.date||'');
   const files=r=>{const a=(r.files||[]).map(f=>links[f.path]?'<a href="'+esc(links[f.path])+'">📎 '+esc(f.name||'ไฟล์แนบ')+'</a>':'📎 '+esc(f.name||'ไฟล์แนบ'));if(r.link&&/^https?:\/\//i.test(r.link))a.push('<a href="'+esc(r.link)+'">🔗 ลิงก์เอกสาร</a>');return a.length?a.join('<br>'):'—';};
-  const repTable=list=>list.length?'<table><thead><tr><th style="width:15%">วันที่รายงาน</th><th class="n" style="width:10%">ความก้าวหน้า</th><th class="n" style="width:11%">จ่ายเงิน (บาท)</th><th>รายละเอียดผลการดำเนินงาน</th><th style="width:22%">ปัญหา/อุปสรรค</th><th style="width:17%">เอกสารแนบ</th></tr></thead><tbody>'+
-    list.map(r=>'<tr><td>'+fmtDate(r.date,true)+(r.createdAt?'<br><span class="muted">บันทึก '+esc(fmtStamp(r.createdAt))+'</span>':'')+'</td><td class="n">'+clampPct(r.percent)+'%</td><td class="n">'+(r.spent?baht(r.spent):'—')+'</td><td>'+(nl(r.detail)||'—')+'</td><td class="'+(r.issues?'issue':'')+'">'+(nl(r.issues)||'—')+'</td><td>'+files(r)+'</td></tr>').join('')+'</tbody></table>':'<div class="muted">ยังไม่มีรายงาน</div>';
+  const repTable=list=>list.length?'<table><thead><tr><th style="width:15%">วันที่รายงาน</th><th class="n" style="width:10%">ความก้าวหน้า</th><th class="n" style="width:10%">จ่ายเงิน (บาท)</th><th class="n" style="width:11%">งบโครงการคงเหลือ (บาท)</th><th>รายละเอียดผลการดำเนินงาน</th><th style="width:22%">ปัญหา/อุปสรรค</th><th style="width:17%">เอกสารแนบ</th></tr></thead><tbody>'+
+    list.map(r=>'<tr><td>'+fmtDate(r.date,true)+(r.createdAt?'<br><span class="muted">บันทึก '+esc(fmtStamp(r.createdAt))+'</span>':'')+'</td><td class="n">'+clampPct(r.percent)+'%</td><td class="n">'+(r.spent?baht(r.spent):'—')+'</td><td class="n">'+(balanceAfter(r)===null?'—':baht(balanceAfter(r)))+'</td><td>'+(nl(r.detail)||'—')+'</td><td class="'+(r.issues?'issue':'')+'">'+(nl(r.issues)||'—')+'</td><td>'+files(r)+'</td></tr>').join('')+'</tbody></table>':'<div class="muted">ยังไม่มีรายงาน</div>';
   const known=new Set(ph.map(p=>p.id));
   let s='<section class="task"><h2>'+esc(t.title||'(ไม่มีชื่องาน)')+'</h2>'+
     '<div class="grid"><div><span class="lb">ผู้รับผิดชอบ</span>'+esc(memberName(t.assignee))+'</div><div><span class="lb">สถานะ</span>'+esc(STATUS_T[t.status||'todo'])+'</div><div><span class="lb">ความสำคัญ</span>'+esc((PRI[t.priority]||PRI.med).t)+'</div>'+
     (()=>{const c=currentPhase(t);return c&&!c.all?'<div style="grid-column:span 3;background:#f3f3ef;padding:4px 8px;border-radius:4px"><span class="lb">เฟสปัจจุบัน</span>เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+' · ความก้าวหน้า '+c.pct+'% · <b>กำหนดแล้วเสร็จเฟสปัจจุบัน '+(c.p.due?dueCell(c.p.due,false).replace('<br>',' '):'—')+'</b> · <b>วันที่คาดว่าจะแล้วเสร็จโครงการ '+(t.due?dueCell(t.due,t.status==='done').replace('<br>',' '):'—')+'</b></div>':'';})()+
-    '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จโครงการ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบประมาณ / เบิกจ่ายแล้ว (บาท)</span>'+(t.budget?baht(t.budget):'—')+' / '+baht(spentOf(t.id))+'</div>'+
+    '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จโครงการ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบรวม / จ่ายแล้วทุกเฟส / คงเหลือ (บาท)</span>'+(projBudget(t)?baht(projBudget(t)):'—')+' / '+baht(spentOf(t.id))+' / '+(projBudget(t)?baht(projBudget(t)-spentOf(t.id)):'—')+'</div>'+
     '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div><span class="lb">ผลการดำเนินงานตามแผน</span>'+planCell(t)+'</div><div><span class="lb">อ้างอิงแผนวิสาหกิจ</span>'+esc(t.planRef||'—')+'</div></div>'+
     (t.desc?'<div><span class="muted">รายละเอียดงาน</span><div>'+nl(t.desc)+'</div></div>':'');
   if(ph.length){
-    s+='<h3>เฟส / งานย่อย</h3><table><thead><tr><th class="n" style="width:5%">#</th><th>เฟส/งานย่อย</th><th class="n">น้ำหนัก</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่าย (บาท)</th><th class="n">คงเหลือ (บาท)</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th><th>ผลแล้วเสร็จ</th></tr></thead><tbody>'+
-      ph.map((p,i)=>{const pp=phasePct(t,p);const pr=phaseResult(t,p);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(p.name)+'</td><td class="n">'+p.weight+'%</td><td class="n">'+(p.budget?baht(p.budget):'—')+'</td><td class="n">'+baht(spentOf(t.id,p.id))+'</td><td class="n'+((Number(p.budget)||0)-spentOf(t.id,p.id)<0?' off':'')+'">'+(p.budget?baht((Number(p.budget)||0)-spentOf(t.id,p.id)):'—')+'</td><td>'+(p.due?fmtDate(p.due,true):'—')+'</td><td>'+pbar(pp)+'</td><td><span class="'+resCls(pr.cls)+'">'+(pr.done?'☑ ':'☐ ')+esc(pr.text)+'</span>'+(pr.done&&pr.doneDate?'<br><span class="muted">เสร็จจริง '+fmtDate(pr.doneDate,true)+'</span>':'')+'</td></tr>';}).join('')+'</tbody></table>';
-    ph.forEach((p,i)=>{const pb=Number(p.budget)||0,px=spentOf(t.id,p.id);s+='<h3>รายงานเฟส '+(i+1)+': '+esc(p.name)+'</h3><div class="muted" style="margin-bottom:2px">งบประมาณเฟส '+(pb?baht(pb)+' บาท':'ยังไม่กำหนด')+' · เบิกจ่ายแล้ว '+baht(px)+' บาท'+(pb?' ('+Math.round(px*100/pb)+'%) · '+(pb-px<0?'<span class="off">เกินงบ '+baht(px-pb)+' บาท</span>':'คงเหลือ '+baht(pb-px)+' บาท'):'')+'</div>'+repTable(reps.filter(r=>r.phaseId===p.id).sort(byRec));});
+    s+='<h3>เฟส / งานย่อย</h3><table><thead><tr><th class="n" style="width:5%">#</th><th>เฟส/งานย่อย</th><th class="n">น้ำหนัก</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่าย (บาท)</th><th class="n">งบโครงการคงเหลือ (บาท)</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th><th>ผลแล้วเสร็จ</th></tr></thead><tbody>'+
+      ph.map((p,i)=>{const pp=phasePct(t,p);const pr=phaseResult(t,p);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(p.name)+'</td><td class="n">'+p.weight+'%</td><td class="n">'+(p.budget?baht(p.budget):'—')+'</td><td class="n">'+baht(spentOf(t.id,p.id))+'</td><td class="n'+((balanceAfterPhase(t,p)||0)<0?' off':'')+'">'+(balanceAfterPhase(t,p)===null?'—':baht(balanceAfterPhase(t,p)))+'</td><td>'+(p.due?fmtDate(p.due,true):'—')+'</td><td>'+pbar(pp)+'</td><td><span class="'+resCls(pr.cls)+'">'+(pr.done?'☑ ':'☐ ')+esc(pr.text)+'</span>'+(pr.done&&pr.doneDate?'<br><span class="muted">เสร็จจริง '+fmtDate(pr.doneDate,true)+'</span>':'')+'</td></tr>';}).join('')+'</tbody></table>';
+    ph.forEach((p,i)=>{const pb=Number(p.budget)||0,px=spentOf(t.id,p.id);s+='<h3>รายงานเฟส '+(i+1)+': '+esc(p.name)+'</h3><div class="muted" style="margin-bottom:2px">งบประมาณเฟส '+(pb?baht(pb)+' บาท':'ยังไม่กำหนด')+' · เบิกจ่ายแล้ว '+baht(px)+' บาท'+(pb?' ('+Math.round(px*100/pb)+'%)':'')+(balanceAfterPhase(t,p)===null?'':' · งบโครงการคงเหลือ '+baht(balanceAfterPhase(t,p))+' บาท (งบรวม '+baht(projBudget(t))+' − จ่ายสะสมถึงเฟสนี้)')+'</div>'+repTable(reps.filter(r=>r.phaseId===p.id).sort(byRec));});
     const rest=reps.filter(r=>!r.phaseId||!known.has(r.phaseId)).sort(byRec);
     if(rest.length)s+='<h3>รายงานที่ไม่ระบุเฟส</h3>'+repTable(rest);
   }else s+='<h3>รายงานความก้าวหน้า</h3>'+repTable(reps.slice().sort(byRec));
@@ -852,7 +874,7 @@ function printExecSummary(){
   const late=open.filter(t=>planStatus(t).off);const rd=remindDays();
   const soon=open.filter(t=>t.due&&!isLate(t)&&dayDiff(t.due)<=rd);
   const avg=Math.round(list.reduce((s,t)=>s+pcs.get(t.id),0)/list.length);
-  const bud=list.reduce((s,t)=>s+(Number(t.budget)||0),0);
+  const bud=list.reduce((s,t)=>s+projBudget(t),0);
   const wavg=bud?Math.round(list.reduce((s,t)=>s+(Number(t.budget)||0)*pcs.get(t.id),0)/bud):avg;
   const sp=new Map(list.map(t=>[t.id,spentOf(t.id)]));const spent=[...sp.values()].reduce((a,b)=>a+b,0);
   let s=docHeader('สรุปรายงานสำหรับผู้บริหาร','ข้อมูล ณ วันที่ '+fmtDate(today(),true)+' · '+filterNote());
@@ -864,7 +886,7 @@ function printExecSummary(){
     return 'เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+'<br><span class="muted">ความก้าวหน้า '+c.pct+'%</span>';};
   const phaseDueCell=t=>{const c=currentPhase(t);if(!c||c.all)return '—';return c.p.due?dueCell(c.p.due,false):'—';};
   s+='<h2>ภาพรวมทุกโครงการ</h2><table><thead><tr><th class="n">#</th><th>โครงการ / ผู้รับผิดชอบ</th><th>วันที่เริ่มต้น</th><th>เฟสปัจจุบัน</th><th>กำหนดแล้วเสร็จ<br>เฟสปัจจุบัน</th><th>วันที่คาดว่าจะแล้วเสร็จ<br>โครงการ</th><th>ความก้าวหน้า</th><th>ผลตามแผน</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่ายแล้ว (บาท)</th><th class="n">คงเหลือ (บาท)</th></tr></thead><tbody>'+
-    list.map((t,i)=>{const b=Number(t.budget)||0,x=sp.get(t.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'<br><span class="muted">'+esc(memberName(t.assignee))+(t.planRef?' · '+esc(t.planRef):'')+'</span></td><td>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</td><td>'+phaseCell(t)+'</td><td>'+phaseDueCell(t)+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+pbar(pcs.get(t.id))+'</td><td>'+planCell(t)+'</td><td class="n">'+(b?baht(b):'—')+'</td><td class="n">'+baht(x)+(b?'<br><span class="muted">'+Math.round(x*100/b)+'%</span>':'')+'</td><td class="n'+(b&&x>b?' off':'')+'">'+(b?baht(b-x):'—')+'</td></tr>';}).join('')+
+    list.map((t,i)=>{const b=projBudget(t),x=sp.get(t.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'<br><span class="muted">'+esc(memberName(t.assignee))+(t.planRef?' · '+esc(t.planRef):'')+'</span></td><td>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</td><td>'+phaseCell(t)+'</td><td>'+phaseDueCell(t)+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+pbar(pcs.get(t.id))+'</td><td>'+planCell(t)+'</td><td class="n">'+(b?baht(b):'—')+'</td><td class="n">'+baht(x)+(b?'<br><span class="muted">'+Math.round(x*100/b)+'%</span>':'')+'</td><td class="n'+(b&&x>b?' off':'')+'">'+(b?baht(b-x):'—')+'</td></tr>';}).join('')+
     '<tr><th colspan="8" class="n">รวม</th><th class="n">'+baht(bud)+'</th><th class="n">'+baht(spent)+'</th><th class="n">'+baht(bud-spent)+'</th></tr></tbody></table>';
   s+='<h2>สถานะงานตามขั้นตอน</h2><table><thead><tr>'+STATUSES.map(x=>'<th class="n">'+esc(x.t)+'</th>').join('')+'</tr></thead><tbody><tr>'+STATUSES.map(x=>'<td class="n">'+list.filter(t=>(t.status||'todo')===x.k).length+'</td>').join('')+'</tr></tbody></table>';
   const attn=late.concat(soon);
@@ -1006,7 +1028,7 @@ function reportForm(t){
   const spent=h('input',{id:'rp-spent',type:'number',min:'0',step:'0.01',class:'num',placeholder:'0'});
   const budInfo=h('div',{class:'stamp',id:'rp-budinfo'});
   const syncBud=()=>{const p=ph.find(x=>x.id===phase.value);const b=p?Number(p.budget)||0:Number(t.budget)||0;const x=spentOf(t.id,p?p.id:undefined);
-    budInfo.textContent=(p?'งบเฟสนี้ ':'งบโครงการ ')+(b?baht(b)+' บาท':'ยังไม่กำหนด')+' · เบิกจ่ายแล้ว '+baht(x)+' บาท'+(b?' · คงเหลือ '+baht(b-x)+' บาท':'');};
+    const pb=projBudget(t),all=spentOf(t.id);budInfo.textContent=(p?'งบเฟสนี้ '+(b?baht(b)+' บาท':'ยังไม่กำหนด')+' · จ่ายในเฟสนี้แล้ว '+baht(x)+' บาท · ':'')+(pb?'งบโครงการคงเหลือ '+baht(pb-all)+' บาท (งบรวม '+baht(pb)+' − จ่ายแล้วทุกเฟส '+baht(all)+')':'ยังไม่ได้กำหนดงบประมาณรวมของโครงการ');};
   phase.addEventListener('change',syncBud);syncBud();
   const submit=h('button',{class:'btn primary',type:'submit',text:'บันทึกรายงาน'});
   const f=h('form',{class:'repform',onsubmit:async e=>{
@@ -1090,7 +1112,7 @@ function openTask(id,tab){
   if(t&&tab==='reports'){
     const body=h('div',{class:'stackv'},tabs,
       h('div',{class:'rep-tools'},h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),h('button',{class:'btn small',type:'button',text:'PDF รายงานงานนี้',onclick:()=>printTaskReport([t.id])})),
-      budgetLine(Number(t.budget)||0,spentOf(t.id),'งบประมาณโครงการ'),
+      budgetLine(projBudget(t),spentOf(t.id),'งบประมาณรวมโครงการ'),
       phasesOf(t).length?h('div',{class:'stamp',text:'ความก้าวหน้ารวมคิดจาก น้ำหนักเฟส × % ล่าสุดของแต่ละเฟส · งบของแต่ละเฟสกำหนดได้ในแท็บข้อมูลงาน'}):null,
       phaseSections(t,{addBtn:true}),
       ro?null:reportForm(t));
