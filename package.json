@@ -1,0 +1,12 @@
+{
+  "name": "teamboard-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "reminders": "node scripts/send-reminders.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.45.4",
+    "nodemailer": "6.9.15"
+  }
+}

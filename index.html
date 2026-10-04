@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>บอร์ดติดตามงานทีม</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+[hidden]{display:none!important}
+body{margin:0}
+img{max-width:100%}
+/* Layout: sticky header with tabs, stat strip, filter bar, then board / list / team views */
+:root{
+  --bg:#f3f4f1;--surface:#ffffff;--sunk:#e8ebe5;--ink:#1c2422;--muted:#5d6763;--line:#d6dbd3;
+  --accent:#1f6b57;--accent-ink:#ffffff;--accent-soft:#dcebe5;
+  --s-todo:#758079;--s-doing:#2f6db3;--s-review:#a86d12;--s-done:#2f8a4f;
+  --danger:#b83a2c;--danger-soft:#f7e1dd;--warn:#a86d12;--warn-soft:#f6ead3;
+  --shadow:0 1px 2px rgba(20,30,26,.06),0 2px 8px rgba(20,30,26,.05);
+  --f-display:"Bai Jamjuree","IBM Plex Sans Thai",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#111513;--surface:#191f1c;--sunk:#222925;--ink:#e5ebe7;--muted:#9aa59f;--line:#2d3531;
+  --accent:#62c2a1;--accent-ink:#0b1410;--accent-soft:#1d3a31;
+  --s-todo:#9aa59f;--s-doing:#6ea8ea;--s-review:#e2ab4f;--s-done:#63c487;
+  --danger:#f0796a;--danger-soft:#3c1f1b;--warn:#e2ab4f;--warn-soft:#3a2f1a;
+  --shadow:0 1px 2px rgba(0,0,0,.3);color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111513;--surface:#191f1c;--sunk:#222925;--ink:#e5ebe7;--muted:#9aa59f;--line:#2d3531;
+  --accent:#62c2a1;--accent-ink:#0b1410;--accent-soft:#1d3a31;
+  --s-todo:#9aa59f;--s-doing:#6ea8ea;--s-review:#e2ab4f;--s-done:#63c487;
+  --danger:#f0796a;--danger-soft:#3c1f1b;--warn:#e2ab4f;--warn-soft:#3a2f1a;
+  --shadow:0 1px 2px rgba(0,0,0,.3);color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:16px}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bg);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:12px}
+.brand{display:flex;flex-direction:column;margin-right:auto;min-width:0}
+.brand h1{font-family:var(--f-display);font-size:1.35rem;font-weight:700;margin:0;letter-spacing:.01em}
+.brand small{color:var(--muted);font-size:.8rem}
+.tabs{display:flex;gap:2px;background:var(--sunk);padding:3px;border-radius:9px}
+.tabs button{border:0;background:none;padding:6px 14px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:500}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.danger.armed{background:var(--danger);color:var(--surface)}
+.btn.ghost{border-color:transparent;background:none;color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+main.wrap{display:flex;flex-direction:column;gap:16px;padding-block:16px 48px}
+.notice{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 14px;border-radius:10px;background:var(--warn-soft);color:var(--ink);font-size:.9rem}
+.notice b{color:var(--warn)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stat .n{font-family:var(--f-mono);font-size:1.6rem;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat .l{color:var(--muted);font-size:.85rem}
+.stat.alert .n{color:var(--danger)}
+.progress{height:6px;border-radius:3px;background:var(--sunk);overflow:hidden;margin-top:6px}
+.progress i{display:block;height:100%;background:var(--s-done)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.filters input[type=search],.filters select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;min-width:0}
+.filters input[type=search]{flex:1 1 220px}
+.chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.9rem;cursor:pointer}
+/* board */
+.board{display:grid;grid-template-columns:repeat(4,minmax(240px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--sunk);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:180px;min-width:0}
+.col.over{outline:2px dashed var(--accent);outline-offset:-2px}
+.col h2{display:flex;align-items:center;gap:8px;font-size:.92rem;font-weight:600;margin:2px 4px 4px}
+.col h2 .dot{width:9px;height:9px;border-radius:50%}
+.col h2 .c{margin-left:auto;font-family:var(--f-mono);color:var(--muted);font-size:.8rem}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;cursor:pointer;box-shadow:var(--shadow);min-width:0}
+.card:hover{border-color:var(--muted)}
+.card.dragging{opacity:.4}
+.card.pri-high{border-left:3px solid var(--danger)}
+.card .t{font-weight:500;overflow-wrap:anywhere}
+.card.is-done .t{color:var(--muted);text-decoration:line-through}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.78rem}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:99px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip.high{background:var(--danger-soft);color:var(--danger)}
+.chip.late{background:var(--danger-soft);color:var(--danger);font-weight:600}
+.chip.soon{background:var(--warn-soft);color:var(--warn)}
+.chip.sample{background:var(--warn-soft);color:var(--warn)}
+.av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:.72rem;font-weight:600;color:#fff;flex:none}
+.av.lg{width:40px;height:40px;font-size:1rem}
+.av.none{background:var(--line);color:var(--muted)}
+.meta .av{margin-left:auto}
+.next{border:0;background:none;color:var(--muted);cursor:pointer;padding:0 2px;font-size:.78rem}
+.next:hover{color:var(--accent)}
+.empty-col{color:var(--muted);font-size:.85rem;text-align:center;padding:16px 4px}
+.skel{height:64px;border-radius:10px;background:var(--surface);opacity:.6}
+/* list */
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse;min-width:680px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:.78rem;color:var(--muted);font-weight:500;letter-spacing:.03em;background:var(--sunk)}
+tr:last-child td{border-bottom:0}
+td.title{cursor:pointer;font-weight:500}
+td.title:hover{color:var(--accent)}
+td select{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:3px 6px}
+.who{display:flex;align-items:center;gap:8px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+/* team */
+.team{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.member{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.member .hd{display:flex;align-items:center;gap:10px}
+.member .hd div{min-width:0;flex:1}
+.member .nm{font-weight:600;overflow-wrap:anywhere}
+.member .rl{color:var(--muted);font-size:.82rem}
+.stack{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--sunk)}
+.stack i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.78rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+.mini{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:.88rem}
+.mini li{display:flex;gap:8px;align-items:baseline;cursor:pointer;min-width:0}
+.mini li span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini li:hover span:first-child{color:var(--accent)}
+.mini .d{font-size:.78rem;color:var(--muted);white-space:nowrap}
+.mini .d.late{color:var(--danger);font-weight:600}
+.addm{border:1px dashed var(--line);background:none;border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.addm h3{margin:0;font-size:.95rem}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:.8rem;color:var(--muted)}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px;width:100%}
+.field textarea{min-height:80px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.row>.field{flex:1 1 150px}
+.welcome{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:12px;max-width:640px}
+.welcome h2{font-family:var(--f-display);margin:0;font-size:1.3rem;text-wrap:balance}
+.welcome ol{margin:0;padding-left:1.3em;color:var(--muted)}
+/* modal */
+.overlay{position:fixed;inset:0;background:rgba(10,16,13,.45);display:grid;place-items:center;padding:16px;z-index:50}
+.modal{background:var(--surface);border-radius:14px;width:min(560px,100%);max-height:calc(100% - 32px);overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modal h2{font-family:var(--f-display);margin:0;font-size:1.2rem}
+.modal .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:4px}
+.modal .actions .btn.danger{margin-right:auto}
+.stamp{font-size:.78rem;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.9rem;z-index:60;max-width:calc(100% - 32px)}
+
+.stackv{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pct{display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--muted)}
+.pct .progress{flex:1;margin:0}
+.pct.big{font-size:1rem;color:var(--ink)}
+.pct.big .progress{height:10px;border-radius:5px}
+table.wide{min-width:900px}
+td.right{text-align:right}
+td.small{font-size:.82rem;color:var(--muted);max-width:220px}
+td.pre{white-space:pre-wrap;font-size:.88rem;max-width:280px}
+td.issue{color:var(--danger)}
+.files{display:flex;flex-direction:column;gap:2px}
+.file{color:var(--accent);font-size:.85rem;text-decoration:none;overflow-wrap:anywhere}
+.file:hover{text-decoration:underline}
+.btn.small{padding:3px 8px;font-size:.82rem}
+.modal.wide{width:min(980px,100%)}
+.mhead{display:flex;align-items:flex-start;gap:8px}
+.mhead h2{flex:1;min-width:0;overflow-wrap:anywhere}
+.mtabs{align-self:flex-start;flex-wrap:wrap}
+input.cell{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:4px 8px;width:100%;min-width:90px}
+.total{font-size:.85rem;font-weight:600}
+.total.ok{color:var(--s-done)}.total.bad{color:var(--danger)}
+.repform{border:1px dashed var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.repform h3{margin:0;font-size:1rem}
+.repform input[type=range]{flex:1;min-width:0}
+.reminders{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:10px}
+.rem-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;justify-content:space-between}
+.rem-toggle{border:0;background:none;display:flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;padding:0;text-align:left}
+.bell{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 6px;border-radius:13px;background:var(--sunk);color:var(--muted);font-family:var(--f-mono);font-size:.85rem}
+.bell.on{background:var(--danger);color:var(--surface)}
+.rem-head select{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:3px 6px;margin-left:6px}
+.rem-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rem-list li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;cursor:pointer;font-size:.9rem}
+.rem-list li:hover .rem-t{color:var(--accent)}
+.rem-t{flex:1 1 220px;min-width:0}
+.rem-who{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.82rem;overflow-wrap:anywhere}
+.rl.mail{font-family:var(--f-mono);font-size:.75rem;overflow-wrap:anywhere}
+td.num,th,.who span{white-space:nowrap}
+.who-box{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);overflow-wrap:anywhere}
+.copyfallback{width:100%;min-height:80px;font-size:.8rem}
+.stats{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+@media (max-width:720px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat .n{font-size:1.3rem}
+  .board{grid-template-columns:repeat(4,minmax(78vw,1fr));scroll-snap-type:x mandatory}
+  .col{scroll-snap-align:start}
+  .tabs{order:3;width:100%}.tabs button{flex:1}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><h1>บอร์ดติดตามงานทีม</h1><small id="modeLabel">กำลังเชื่อมต่อ…</small></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-board" data-view="board" aria-selected="true">บอร์ด</button>
+      <button role="tab" id="tab-list" data-view="list" aria-selected="false">รายการ</button>
+      <button role="tab" id="tab-reports" data-view="reports" aria-selected="false">รายงาน</button>
+      <button role="tab" id="tab-team" data-view="team" aria-selected="false">ทีม</button>
+    </div>
+    <button class="btn primary" id="newTask">+ งานใหม่</button>
+    <div class="who-box" id="who" hidden><span id="whoEmail"></span><button class="btn ghost small" id="signOut">ออกจากระบบ</button></div>
+  </div>
+</header>
+<main class="wrap">
+  <div id="notice"></div>
+  <section id="reminders"></section>
+  <section class="stats" id="stats" aria-label="สรุปภาพรวม"></section>
+  <div class="filters" id="filters">
+    <input type="search" id="fq" placeholder="ค้นหางาน แผนวิสาหกิจ…" aria-label="ค้นหางาน">
+    <select id="fm" aria-label="กรองตามผู้รับผิดชอบ"></select>
+    <select id="fp" aria-label="กรองตามความสำคัญ">
+      <option value="">ทุกความสำคัญ</option><option value="high">ด่วน</option><option value="med">ปกติ</option><option value="low">ต่ำ</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="fo"> เฉพาะงานเกินกำหนด</label>
+  </div>
+  <section id="view"></section>
+</main>
+<div id="modalRoot"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+const STATUSES=[{k:'todo',t:'รอเริ่ม'},{k:'doing',t:'กำลังทำ'},{k:'review',t:'รอตรวจ'},{k:'done',t:'เสร็จแล้ว'}];
+const STATUS_T=Object.fromEntries(STATUSES.map(s=>[s.k,s.t]));
+const PRI={high:{t:'ด่วน',o:0},med:{t:'ปกติ',o:1},low:{t:'ต่ำ',o:2}};
+const COLORS=['#2f6db3','#b5532f','#2f8a6a','#8a4fb3','#b3862f','#2f8fa6','#a63f6b','#5a7a2f'];
+const LS_KEY='teamboard-standalone-v1';
+const COLS=['members','tasks','reports','settings'];
+const S={members:{},tasks:{},reports:{},settings:{},view:'board',f:{q:'',m:'',p:'',o:false},mode:'loading',canWrite:true,db:null,assets:null,user:null,me:null,remOpen:true};
+
+// ---------- helpers ----------
+function h(tag,attrs,...kids){
+  const el=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){
+    if(v==null||v===false)continue;
+    if(k==='class')el.className=v;
+    else if(k==='text')el.textContent=v;
+    else if(k==='style')el.style.cssText=v;
+    else if(k.startsWith('on'))el.addEventListener(k.slice(2),v);
+    else if(k in el&&typeof v!=='string')el[k]=v;
+    else el.setAttribute(k,v===true?'':v);
+  }
+  for(const c of kids.flat()){if(c==null||c===false)continue;el.append(c.nodeType?c:document.createTextNode(String(c)));}
+  return el;
+}
+const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const pad=n=>String(n).padStart(2,'0');
+const isoDay=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const today=()=>isoDay(new Date());
+const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return isoDay(d)};
+function dayDiff(iso){const [y,m,d]=iso.split('-').map(Number);const a=new Date(y,m-1,d);const t=new Date();t.setHours(0,0,0,0);return Math.round((a-t)/864e5);}
+function fmtDate(iso,yr){if(!iso)return '';const [y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('th-TH',yr?{day:'numeric',month:'short',year:'2-digit'}:{day:'numeric',month:'short'});}
+const baht=n=>(Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2});
+const clampPct=v=>Math.max(0,Math.min(100,Math.round(Number(v)||0)));
+const remindDays=()=>Number(S.settings.main&&S.settings.main.remindDays)||3;
+function dueInfo(due,done){
+  if(!due)return null;
+  const n=dayDiff(due);
+  if(done)return{cls:'',text:fmtDate(due)};
+  if(n<0)return{cls:'late',text:'เกิน '+(-n)+' วัน'};
+  if(n===0)return{cls:'soon',text:'ครบวันนี้'};
+  if(n<=remindDays())return{cls:'soon',text:'อีก '+n+' วัน'};
+  return{cls:'',text:fmtDate(due)};
+}
+function initials(name){return (name||'?').trim().slice(0,1).toUpperCase();}
+function avatar(m,lg){
+  if(!m)return h('span',{class:'av none'+(lg?' lg':''),title:'ยังไม่มอบหมาย',text:'–'});
+  return h('span',{class:'av'+(lg?' lg':''),style:'background:'+(m.color||COLORS[0]),title:m.name,text:initials(m.name)});
+}
+function bar(p){return h('div',{class:'progress',title:p+'%'},h('i',{style:'width:'+p+'%'}));}
+let toastT;
+function toast(msg){document.querySelectorAll('.toast').forEach(e=>e.remove());const el=h('div',{class:'toast',role:'status',text:msg});document.body.append(el);clearTimeout(toastT);toastT=setTimeout(()=>el.remove(),2800);}
+async function copyText(text,btn){
+  try{await navigator.clipboard.writeText(text);toast('คัดลอกแล้ว');}
+  catch(e){const ta=h('textarea',{class:'copyfallback',readonly:true});ta.value=text;btn.after(ta);ta.select();toast('กด Ctrl+C / ⌘C เพื่อคัดลอก');}
+}
+
+// ---------- progress ----------
+function reportsFor(taskId){return Object.entries(S.reports).map(([id,v])=>Object.assign({id},v)).filter(r=>r.taskId===taskId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));}
+function latestPct(taskId,phaseId){const r=reportsFor(taskId).find(r=>(r.phaseId||'')===(phaseId||''));return r?clampPct(r.percent):0;}
+function phasesOf(t){return Array.isArray(t.phases)?t.phases:[];}
+function taskPct(t){
+  if(t.status==='done')return 100;
+  const ph=phasesOf(t);
+  if(ph.length)return Math.round(ph.reduce((s,p)=>s+(Number(p.weight)||0)*latestPct(t.id,p.id)/100,0));
+  return latestPct(t.id,'');
+}
+const isLate=t=>t.due&&t.status!=='done'&&dayDiff(t.due)<0;
+
+// ---------- storage backends ----------
+const CFG=window.TEAMBOARD_CONFIG||{};
+let sb=null;
+function loadLocal(){try{const raw=localStorage.getItem(LS_KEY);if(raw){const d=JSON.parse(raw);COLS.forEach(c=>S[c]=d[c]||{});return true;}}catch(e){}return false;}
+function saveLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(Object.fromEntries(COLS.map(c=>[c,S[c]]))));}catch(e){}}
+async function write(col,id,data){
+  if(!S.canWrite){toast('คุณมีสิทธิ์ดูอย่างเดียว');return false;}
+  if(S.mode==='local'){
+    if(data===null)delete S[col][id];else S[col][id]=Object.assign({},S[col][id],data);
+    saveLocal();render();return true;
+  }
+  try{
+    if(data===null){const {error}=await sb.from(col).delete().eq('id',id);if(error)throw error;delete S[col][id];}
+    else{
+      const merged=Object.assign({},S[col][id],data);
+      const {error}=await sb.from(col).upsert({id,data:merged,updated_at:new Date().toISOString()});
+      if(error)throw error;S[col][id]=merged;
+    }
+    render();return true;
+  }catch(e){
+    console.warn('write failed',e);
+    toast(/row-level security|permission/i.test(e.message||'')?'บันทึกไม่ได้: อีเมลนี้ยังไม่ได้อยู่ในรายชื่อทีม':'บันทึกไม่สำเร็จ: '+(e.message||'ลองใหม่อีกครั้ง'));
+    return false;
+  }
+}
+async function loadAll(){
+  for(const c of COLS){
+    const {data,error}=await sb.from(c).select('id,data');
+    if(error)throw error;
+    S[c]=Object.fromEntries(data.map(r=>[r.id,r.data]));
+  }
+}
+function subscribeRealtime(){
+  sb.channel('teamboard').on('postgres_changes',{event:'*',schema:'public'},p=>{
+    const c=p.table;if(!COLS.includes(c))return;
+    if(p.eventType==='DELETE'){if(p.old&&p.old.id)delete S[c][p.old.id];}
+    else if(p.new&&p.new.id)S[c][p.new.id]=p.new.data;
+    render();
+  }).subscribe();
+}
+async function boot(){
+  render();
+  if(!CFG.supabaseUrl||!CFG.supabaseAnonKey||!window.supabase){
+    S.mode='local';if(!loadLocal())seedSample(true);render();return;
+  }
+  sb=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey);
+  sb.auth.onAuthStateChange((ev,sess)=>{
+    if(ev==='SIGNED_IN'&&sess&&!S.session){S.session=sess;start();}
+    if(ev==='SIGNED_OUT')location.reload();
+  });
+  const {data:{session}}=await sb.auth.getSession();
+  if(session){S.session=session;start();}
+  else{S.mode='login';render();}
+}
+async function start(){
+  S.me=S.session.user.email||'';
+  document.getElementById('who').hidden=false;
+  document.getElementById('whoEmail').textContent=S.me;
+  try{
+    const {data:ok,error}=await sb.rpc('am_i_member');
+    if(error)throw error;
+    if(!ok){S.mode='notmember';render();return;}
+    await loadAll();S.mode='db';subscribeRealtime();
+  }catch(e){console.error(e);S.mode='error';S.err=e.message||String(e);}
+  render();
+}
+async function uploadFile(taskId,file){
+  const safe=file.name.replace(/[^\w.\-]+/g,'_').slice(-80);
+  const path=taskId+'/'+uid('f')+'-'+safe;
+  const {error}=await sb.storage.from('attachments').upload(path,file,{contentType:file.type||'application/octet-stream'});
+  if(error)throw error;
+  return{path,name:file.name,type:file.type||''};
+}
+async function openFile(f){
+  const win=window.open('','_blank');
+  const {data,error}=await sb.storage.from('attachments').createSignedUrl(f.path,600);
+  if(error){if(win)win.close();toast('เปิดไฟล์ไม่ได้: '+error.message);return;}
+  if(win)win.location=data.signedUrl;else location.href=data.signedUrl;
+}
+function renderGate(v){
+  if(S.mode==='login'){
+    const email=h('input',{id:'login-email',type:'email',placeholder:'name@company.com',required:true,autocomplete:'email'});
+    const btn=h('button',{class:'btn primary',type:'submit',text:'ส่งลิงก์เข้าสู่ระบบ'});
+    v.append(h('form',{class:'welcome',onsubmit:async e=>{e.preventDefault();btn.disabled=true;
+      const {error}=await sb.auth.signInWithOtp({email:email.value.trim(),options:{emailRedirectTo:location.origin+location.pathname}});
+      btn.disabled=false;
+      if(error)toast('ส่งลิงก์ไม่สำเร็จ: '+error.message);
+      else{v.replaceChildren(h('div',{class:'welcome'},h('h2',{text:'ตรวจอีเมลของคุณ'}),h('p',{text:'เราส่งลิงก์เข้าสู่ระบบไปที่ '+email.value.trim()+' แล้ว กดลิงก์ในอีเมลเพื่อเข้าใช้งาน (ถ้าไม่เห็น ให้ดูในโฟลเดอร์สแปม)'})));}
+    }},h('h2',{text:'เข้าสู่ระบบด้วยอีเมล'}),h('p',{class:'stamp',text:'ใส่อีเมลที่หัวหน้าทีมเพิ่มไว้ในรายชื่อทีม ระบบจะส่งลิงก์เข้าสู่ระบบให้ ไม่ต้องตั้งรหัสผ่าน'}),
+      h('div',{class:'field'},h('label',{for:'login-email',text:'อีเมล'}),email),h('div',null,btn)));
+    return true;
+  }
+  if(S.mode==='notmember'){
+    v.append(h('div',{class:'welcome'},h('h2',{text:'อีเมลนี้ยังไม่ได้อยู่ในทีม'}),
+      h('p',{text:'ขอให้หัวหน้าทีมเพิ่มอีเมล '+S.me+' ในแท็บ “ทีม” แล้วรีเฟรชหน้านี้อีกครั้ง'}),
+      h('div',{class:'row'},h('button',{class:'btn',text:'รีเฟรช',onclick:()=>location.reload()}),h('button',{class:'btn',text:'ออกจากระบบ',onclick:()=>sb.auth.signOut()}))));
+    return true;
+  }
+  if(S.mode==='error'){
+    v.append(h('div',{class:'welcome'},h('h2',{text:'เชื่อมต่อฐานข้อมูลไม่ได้'}),h('p',{class:'stamp',text:S.err||''}),h('p',{text:'ตรวจว่ารันไฟล์ supabase/schema.sql แล้ว และค่าใน config.js ถูกต้อง'})));
+    return true;
+  }
+  return false;
+}
+
+// ---------- sample data ----------
+function sampleData(){
+  const m=[['นภา','หัวหน้าโครงการ','napa@example.com'],['ธนกร','นักพัฒนา','thanakorn@example.com'],['ปิยะ','ออกแบบ UX/UI','piya@example.com'],['วรรณา','การตลาด','wanna@example.com']]
+    .map((x,i)=>({id:'sm'+i,name:x[0],role:x[1],email:x[2],color:COLORS[i],sample:true,createdAt:Date.now()+i}));
+  const ph=(...a)=>a.map((x,i)=>({id:'p'+i,name:x[0],weight:x[1],due:addDays(x[2])}));
+  const t=[
+    {title:'พัฒนาระบบชำระเงินออนไลน์',status:'doing',priority:'high',assignee:'sm1',assignedDate:addDays(-14),due:addDays(10),budget:250000,planRef:'แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 2: บริการดิจิทัล',
+      phases:ph(['วิเคราะห์ความต้องการ',20,-7],['พัฒนาระบบ',50,4],['ทดสอบและส่งมอบ',30,10])},
+    {title:'ออกแบบหน้าจอแดชบอร์ดผู้บริหาร',status:'review',priority:'high',assignee:'sm2',assignedDate:addDays(-10),due:addDays(1),budget:60000,planRef:'',phases:[]},
+    {title:'วางแผนแคมเปญเปิดตัวบริการ',status:'doing',priority:'med',assignee:'sm3',assignedDate:addDays(-5),due:addDays(-1),budget:120000,planRef:'แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 4: การตลาด',
+      phases:ph(['สำรวจกลุ่มเป้าหมาย',40,-3],['จัดทำสื่อ',60,-1])},
+    {title:'สรุปงบประมาณไตรมาส 4',status:'todo',priority:'low',assignee:'sm0',assignedDate:addDays(-1),due:addDays(12),budget:0,planRef:'',phases:[]},
+    {title:'ประชุมเริ่มโครงการกับลูกค้า',status:'done',priority:'med',assignee:'sm0',assignedDate:addDays(-20),due:addDays(-6),budget:5000,planRef:'',phases:[]},
+  ].map((x,i)=>Object.assign({id:'st'+i,desc:'',sample:true,createdAt:Date.now()+i,updatedAt:Date.now(),completedAt:x.status==='done'?Date.now()-6*864e5:null},x));
+  const r=[
+    ['st0','p0',-8,100,'สรุปความต้องการกับฝ่ายบัญชีและลูกค้าครบแล้ว',''],
+    ['st0','p1',-2,40,'เชื่อมต่อ API ธนาคารได้ 2 จาก 4 ธนาคาร','รอเอกสารรับรองจากธนาคาร B'],
+    ['st1','',-1,90,'ออกแบบครบทุกหน้า รอผู้บริหารตรวจ',''],
+    ['st2','p0',-3,100,'สำรวจผู้ใช้ 120 คนเสร็จ',''],
+    ['st2','p1',-1,50,'ทำสื่อออนไลน์เสร็จครึ่งหนึ่ง','ช่างภาพไม่ว่าง เลื่อนถ่ายทำ 3 วัน'],
+  ].map((x,i)=>({id:'sr'+i,taskId:x[0],phaseId:x[1],date:addDays(x[2]),percent:x[3],detail:x[4],issues:x[5],files:[],link:'',sample:true,createdAt:Date.now()+i}));
+  return{members:m,tasks:t,reports:r};
+}
+async function seedSample(silent){
+  const d=sampleData();
+  if(S.mode==='local'||silent){for(const c of ['members','tasks','reports'])d[c].forEach(x=>S[c][x.id]=x);saveLocal();render();return;}
+  for(const c of ['members','tasks','reports'])for(const x of d[c]){const {id,...v}=x;await write(c,id,v);}
+  toast('เพิ่มข้อมูลตัวอย่างแล้ว');
+}
+async function clearSample(){
+  for(const c of ['reports','tasks','members'])for(const [id,v] of Object.entries(S[c]))if(v.sample)await write(c,id,null);
+  toast('ลบข้อมูลตัวอย่างแล้ว');
+}
+
+// ---------- derived ----------
+function memberList(){return Object.entries(S.members).map(([id,v])=>Object.assign({id},v)).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));}
+function taskList(){return Object.entries(S.tasks).map(([id,v])=>Object.assign({id},v));}
+function filtered(){
+  const q=S.f.q.trim().toLowerCase();
+  return taskList().filter(t=>{
+    if(q&&!((t.title||'')+' '+(t.desc||'')+' '+(t.planRef||'')+' '+phasesOf(t).map(p=>p.name).join(' ')).toLowerCase().includes(q))return false;
+    if(S.f.m==='_none'&&t.assignee&&S.members[t.assignee])return false;
+    if(S.f.m&&S.f.m!=='_none'&&t.assignee!==S.f.m)return false;
+    if(S.f.p&&t.priority!==S.f.p)return false;
+    if(S.f.o&&!isLate(t))return false;
+    return true;
+  });
+}
+function sortTasks(a,b){
+  const pa=(PRI[a.priority]||PRI.med).o,pb=(PRI[b.priority]||PRI.med).o;
+  const da=a.due||'9999',db_=b.due||'9999';
+  return da<db_?-1:da>db_?1:pa-pb||(a.createdAt||0)-(b.createdAt||0);
+}
+function reminderItems(){
+  const out=[];const lim=remindDays();
+  for(const t of taskList()){
+    if(t.status==='done')continue;
+    const m=S.members[t.assignee];
+    if(t.due&&dayDiff(t.due)<=lim)out.push({t,m,label:t.title,due:t.due,n:dayDiff(t.due)});
+    for(const p of phasesOf(t)){
+      if(p.due&&latestPct(t.id,p.id)<100&&dayDiff(p.due)<=lim)out.push({t,m,label:t.title+' › '+p.name,due:p.due,n:dayDiff(p.due),phase:true});
+    }
+  }
+  return out.sort((a,b)=>a.n-b.n);
+}
+
+// ---------- render ----------
+function render(){
+  document.querySelectorAll('.tabs button[data-view]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.view===S.view)));
+  const ml=document.getElementById('modeLabel');
+  ml.textContent=S.mode==='loading'?'กำลังโหลดข้อมูล…':S.mode==='db'?'ข้อมูลออนไลน์ อัปเดตพร้อมกันทุกคน':S.mode==='local'?'โหมดทดลอง · เก็บในเบราว์เซอร์นี้เท่านั้น':'ระบบติดตามงานของทีม';
+  document.getElementById('newTask').disabled=!S.canWrite||S.mode==='loading';
+  const v=document.getElementById('view');v.replaceChildren();
+  const gated=['login','notmember','error'].includes(S.mode);
+  ['stats','reminders','filters','notice'].forEach(i=>document.getElementById(i).hidden=gated);
+  document.querySelector('.tabs').hidden=gated;document.getElementById('newTask').hidden=gated;
+  if(gated){renderGate(v);return;}
+  renderNotice();renderReminders();renderStats();renderFilters();
+  const empty=S.mode==='db'&&!Object.keys(S.tasks).length&&!Object.keys(S.members).length;
+  document.getElementById('filters').hidden=(empty&&S.view!=='team')||S.view==='team';
+  if(empty&&S.view!=='team'){v.append(renderWelcome());return;}
+  if(S.view==='board')v.append(renderBoard());
+  else if(S.view==='list')v.append(renderListView());
+  else if(S.view==='reports')v.append(renderReportsView());
+  else v.append(renderTeam());
+}
+function renderNotice(){
+  const n=document.getElementById('notice');n.replaceChildren();
+  const hasSample=['tasks','members','reports'].some(c=>Object.values(S[c]).some(x=>x.sample));
+  const items=[];
+  if(S.mode==='local')items.push(h('div',{class:'notice'},h('span',null,h('b',{text:'โหมดทดลอง'}),' ยังไม่ได้ตั้งค่า Supabase ใน config.js ข้อมูลจึงเก็บเฉพาะในเบราว์เซอร์นี้')));
+  if(hasSample&&S.canWrite)items.push(h('div',{class:'notice'},h('span',null,h('b',{text:'กำลังแสดงข้อมูลตัวอย่าง'}),' ลองเปิดงาน ดูเฟส และเพิ่มรายงานความก้าวหน้าได้เลย'),h('button',{class:'btn',onclick:clearSample,text:'ลบข้อมูลตัวอย่าง'})));
+  n.append(...items);n.hidden=!items.length;n.style.cssText=items.length?'display:flex;flex-direction:column;gap:8px':'';
+}
+function reminderEmailText(items){
+  const by={};items.forEach(it=>{const k=it.m?it.m.name+(it.m.email?' <'+it.m.email+'>':''):'ยังไม่มอบหมาย';(by[k]=by[k]||[]).push(it);});
+  return Object.entries(by).map(([who,list])=>'ถึง: '+who+'\nเรื่อง: แจ้งเตือนงานใกล้ถึงกำหนดแล้วเสร็จ\n\n'+list.map(it=>'• '+it.label+' — กำหนดแล้วเสร็จ '+fmtDate(it.due,true)+' ('+(it.n<0?'เกินกำหนด '+(-it.n)+' วัน':it.n===0?'ครบวันนี้':'อีก '+it.n+' วัน')+')').join('\n')).join('\n\n----------\n\n');
+}
+function renderReminders(){
+  const el=document.getElementById('reminders');el.replaceChildren();
+  if(S.mode==='loading')return;
+  const items=reminderItems();
+  const sel=h('select',{id:'rem-days','aria-label':'แจ้งเตือนล่วงหน้า',disabled:!S.canWrite,onchange:e=>write('settings','main',{remindDays:Number(e.target.value)})},[1,2,3,5,7,14].map(n=>h('option',{value:String(n),text:n+' วัน'})));
+  sel.value=String(remindDays());
+  const head=h('div',{class:'rem-head'},
+    h('button',{class:'rem-toggle','aria-expanded':String(S.remOpen),onclick:()=>{S.remOpen=!S.remOpen;renderReminders();}},
+      h('span',{class:'bell'+(items.length?' on':''),text:String(items.length)}),
+      items.length?'งานที่ต้องแจ้งเตือน (ใกล้ถึง/เกินวันที่คาดว่าจะแล้วเสร็จ)':'ไม่มีงานที่ต้องแจ้งเตือนตอนนี้'),
+    h('label',{class:'chk',for:'rem-days'},'แจ้งล่วงหน้า',sel));
+  const box=h('div',{class:'reminders'},head);
+  if(items.length&&S.remOpen){
+    box.append(h('ul',{class:'rem-list'},items.map(it=>h('li',{onclick:()=>openTask(it.t.id)},
+      h('span',{class:'chip '+(it.n<0?'late':'soon'),text:it.n<0?'เกิน '+(-it.n)+' วัน':it.n===0?'วันนี้':'อีก '+it.n+' วัน'}),
+      h('span',{class:'rem-t',text:it.label}),
+      h('span',{class:'rem-who'},avatar(it.m),h('span',{text:it.m?(it.m.email||it.m.name+' (ยังไม่มีอีเมล)'):'ยังไม่มอบหมาย'}))))));
+    const cb=h('button',{class:'btn',text:'คัดลอกข้อความอีเมลแจ้งเตือน'});cb.addEventListener('click',()=>copyText(reminderEmailText(items),cb));
+    box.append(h('div',{class:'row',style:'align-items:center'},cb,h('span',{class:'stamp',text:'ระบบส่งอีเมลแจ้งเตือนอัตโนมัติทุกเช้า 08:00 น. ให้ผู้รับผิดชอบแต่ละคน'})));
+  }
+  el.append(box);
+}
+function renderStats(){
+  const all=taskList();const open=all.filter(t=>t.status!=='done');
+  const late=open.filter(isLate).length;
+  const avg=all.length?Math.round(all.reduce((s,t)=>s+taskPct(t),0)/all.length):0;
+  const budget=all.reduce((s,t)=>s+(Number(t.budget)||0),0);
+  const done=all.length-open.length;
+  document.getElementById('stats').replaceChildren(
+    h('div',{class:'stat'},h('span',{class:'n',text:String(open.length)}),h('span',{class:'l',text:'งานที่ยังเปิดอยู่ · เสร็จ '+done})),
+    h('div',{class:'stat'+(late?' alert':'')},h('span',{class:'n',text:String(late)}),h('span',{class:'l',text:'เกินวันที่คาดว่าจะแล้วเสร็จ'})),
+    h('div',{class:'stat'},h('span',{class:'n',text:avg+'%'}),h('span',{class:'l',text:'ความก้าวหน้าเฉลี่ยทุกงาน'}),bar(avg)),
+    h('div',{class:'stat'},h('span',{class:'n',text:baht(budget)}),h('span',{class:'l',text:'งบประมาณรวม (บาท)'})));
+}
+function renderFilters(){
+  const sel=document.getElementById('fm');const cur=S.f.m;sel.replaceChildren(h('option',{value:'',text:'ทุกคนในทีม'}),...memberList().map(m=>h('option',{value:m.id,text:m.name})),h('option',{value:'_none',text:'ยังไม่มอบหมาย'}));
+  sel.value=cur;if(sel.value!==cur){S.f.m='';sel.value='';}
+}
+function card(t){
+  const m=S.members[t.assignee];const di=dueInfo(t.due,t.status==='done');const p=taskPct(t);
+  const idx=STATUSES.findIndex(s=>s.k===t.status);const nxt=STATUSES[idx+1];const ph=phasesOf(t);
+  const el=h('article',{class:'card pri-'+(t.priority||'med')+(t.status==='done'?' is-done':''),draggable:S.canWrite?'true':null,tabindex:'0',
+    onclick:()=>openTask(t.id),onkeydown:e=>{if(e.key==='Enter')openTask(t.id)},
+    ondragstart:e=>{e.dataTransfer.setData('text/plain',t.id);e.dataTransfer.effectAllowed='move';el.classList.add('dragging')},
+    ondragend:()=>el.classList.remove('dragging')},
+    h('div',{class:'t',text:t.title||'(ไม่มีชื่องาน)'}),
+    h('div',{class:'pct'},bar(p),h('span',{class:'num',text:p+'%'})),
+    h('div',{class:'meta'},
+      t.priority==='high'?h('span',{class:'chip high',text:'ด่วน'}):null,
+      di?h('span',{class:'chip '+di.cls,title:'วันที่คาดว่าจะแล้วเสร็จ',text:di.text}):null,
+      ph.length?h('span',{class:'chip',text:ph.length+' เฟส'}):null,
+      t.sample?h('span',{class:'chip sample',text:'ตัวอย่าง'}):null,
+      nxt&&S.canWrite?h('button',{class:'next',title:'ย้ายไป '+nxt.t,text:'→ '+nxt.t,onclick:e=>{e.stopPropagation();setStatus(t.id,nxt.k)}}):null,
+      avatar(m)));
+  return el;
+}
+function renderBoard(){
+  const list=filtered();
+  return h('div',{class:'board'},STATUSES.map(s=>{
+    const items=list.filter(t=>(t.status||'todo')===s.k).sort(sortTasks);
+    const col=h('div',{class:'col',
+      ondragover:e=>{if(!S.canWrite)return;e.preventDefault();col.classList.add('over')},
+      ondragleave:()=>col.classList.remove('over'),
+      ondrop:e=>{e.preventDefault();col.classList.remove('over');const id=e.dataTransfer.getData('text/plain');if(id&&S.tasks[id]&&S.tasks[id].status!==s.k)setStatus(id,s.k);}},
+      h('h2',null,h('span',{class:'dot',style:'background:var(--s-'+s.k+')'}),s.t,h('span',{class:'c',text:String(items.length)})),
+      S.mode==='loading'?[h('div',{class:'skel'}),h('div',{class:'skel'})]:
+      items.length?items.map(card):h('div',{class:'empty-col',text:s.k==='todo'&&S.canWrite?'ยังไม่มีงาน กด “+ งานใหม่” เพื่อเพิ่ม':'ไม่มีงานในช่องนี้'}));
+    return col;
+  }));
+}
+function renderListView(){
+  const list=filtered().sort(sortTasks);
+  if(!list.length)return h('div',{class:'tablewrap'},h('div',{class:'empty-col',text:S.mode==='loading'?'กำลังโหลด…':'ไม่พบงานตามตัวกรองนี้'}));
+  return h('div',{class:'tablewrap'},h('table',{class:'wide'},
+    h('thead',null,h('tr',null,['งาน','ผู้รับผิดชอบ','วันที่มอบหมาย','คาดว่าจะแล้วเสร็จ','ความก้าวหน้า','งบประมาณ (บาท)','แผนวิสาหกิจ','สถานะ'].map(x=>h('th',{text:x})))),
+    h('tbody',null,list.map(t=>{
+      const m=S.members[t.assignee];const di=dueInfo(t.due,t.status==='done');const p=taskPct(t);
+      const st=h('select',{'aria-label':'สถานะ',disabled:!S.canWrite,onchange:e=>setStatus(t.id,e.target.value)},STATUSES.map(s=>h('option',{value:s.k,text:s.t})));st.value=t.status||'todo';
+      return h('tr',null,
+        h('td',{class:'title',onclick:()=>openTask(t.id)},t.title||'(ไม่มีชื่องาน)',phasesOf(t).length?h('div',{class:'stamp',text:phasesOf(t).length+' เฟส/งานย่อย'}):null,t.sample?h('span',{class:'chip sample',text:'ตัวอย่าง'}):null),
+        h('td',null,h('div',{class:'who'},avatar(m),h('span',{text:m?m.name:'—'}))),
+        h('td',{class:'num',text:t.assignedDate?fmtDate(t.assignedDate,true):'—'}),
+        h('td',null,t.due?h('div',null,h('div',{class:'num',text:fmtDate(t.due,true)}),di&&di.cls?h('span',{class:'chip '+di.cls,text:di.text}):null):'—'),
+        h('td',{style:'min-width:120px'},h('div',{class:'pct'},bar(p),h('span',{class:'num',text:p+'%'}))),
+        h('td',{class:'num right',text:t.budget?baht(t.budget):'—'}),
+        h('td',{class:'small',text:t.planRef||'—'}),
+        h('td',null,st));
+    }))));
+}
+function fileLinks(r){
+  const out=[];
+  (r.files||[]).forEach(f=>out.push(h('a',{href:'#',class:'file',text:'📎 '+(f.name||'ไฟล์แนบ'),onclick:e=>{e.preventDefault();if(sb&&f.path)openFile(f);}})));
+  if(r.link&&/^https?:\/\//i.test(r.link))out.push(h('a',{href:r.link,target:'_blank',rel:'noopener noreferrer',class:'file',text:'🔗 ลิงก์เอกสาร'}));
+  return out.length?h('div',{class:'files'},out):'—';
+}
+function reportTable(reports,showTask){
+  if(!reports.length)return h('div',{class:'empty-col',text:'ยังไม่มีรายงานความก้าวหน้า'});
+  const heads=['วันที่รายงาน',...(showTask?['งาน','ผู้รับผิดชอบ']:[]),'เฟส/งานย่อย','ความก้าวหน้า','รายละเอียดผลการดำเนินงาน','ปัญหา/อุปสรรค','เอกสารแนบ',''];
+  return h('div',{class:'tablewrap'},h('table',{class:'wide'},
+    h('thead',null,h('tr',null,heads.map(x=>h('th',{text:x})))),
+    h('tbody',null,reports.map(r=>{
+      const t=S.tasks[r.taskId]||{};const ph=phasesOf(t).find(p=>p.id===r.phaseId);const m=S.members[t.assignee];
+      const del=S.canWrite?armDelete(h('button',{class:'btn ghost small'}),'ลบ',()=>deleteReport(r)):null;
+      return h('tr',null,
+        h('td',{class:'num',text:fmtDate(r.date,true)}),
+        showTask?h('td',{class:'title',onclick:()=>openTask(r.taskId),text:t.title||'(งานถูกลบ)'}):null,
+        showTask?h('td',null,h('div',{class:'who'},avatar(m),h('span',{text:m?m.name:'—'}))):null,
+        h('td',{text:ph?ph.name+' ('+ph.weight+'%)':(r.phaseId?'(เฟสถูกลบ)':'ทั้งงาน')}),
+        h('td',{style:'min-width:110px'},h('div',{class:'pct'},bar(clampPct(r.percent)),h('span',{class:'num',text:clampPct(r.percent)+'%'}))),
+        h('td',{class:'pre',text:r.detail||'—'}),
+        h('td',{class:'pre'+(r.issues?' issue':''),text:r.issues||'—'}),
+        h('td',null,fileLinks(r)),
+        h('td',null,del));
+    }))));
+}
+function renderReportsView(){
+  const ids=new Set(filtered().map(t=>t.id));
+  const reps=Object.entries(S.reports).map(([id,v])=>Object.assign({id},v)).filter(r=>ids.has(r.taskId)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+  const issues=reps.filter(r=>r.issues).length;
+  return h('div',{class:'stackv'},h('div',{class:'stamp',text:'รายงานทั้งหมด '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),reportTable(reps,true));
+}
+function memberCard(m,tasks){
+  const counts=Object.fromEntries(STATUSES.map(s=>[s.k,tasks.filter(t=>(t.status||'todo')===s.k).length]));
+  const total=tasks.length;const open=tasks.filter(t=>t.status!=='done').sort(sortTasks);const late=open.filter(isLate).length;
+  const budget=tasks.reduce((s,t)=>s+(Number(t.budget)||0),0);
+  return h('div',{class:'member'},
+    h('div',{class:'hd'},avatar(m,true),h('div',null,h('div',{class:'nm',text:m?m.name:'ยังไม่มอบหมาย'}),h('div',{class:'rl',text:m?(m.role||'สมาชิกทีม'):'งานที่ยังไม่มีผู้รับผิดชอบ'}),m?h('div',{class:'rl mail',text:m.email||'ยังไม่ได้ใส่อีเมล'}):null),
+      m&&S.canWrite?h('button',{class:'btn ghost',onclick:()=>openMember(m.id),text:'แก้ไข'}):null),
+    h('div',{class:'stack',title:total+' งาน'},STATUSES.map(s=>counts[s.k]?h('i',{style:'width:'+(counts[s.k]/total*100)+'%;background:var(--s-'+s.k+')'}):null)),
+    h('div',{class:'legend'},STATUSES.map(s=>h('span',null,h('i',{class:'dot',style:'width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--s-'+s.k+')'}),s.t+' ',h('b',{text:String(counts[s.k])}))),
+      late?h('span',{style:'color:var(--danger);font-weight:600'},'เกินกำหนด '+late):null,
+      budget?h('span',null,'งบ ',h('b',{text:baht(budget)}),' บาท'):null),
+    open.length?h('ul',{class:'mini'},open.slice(0,5).map(t=>{const di=dueInfo(t.due,false);return h('li',{onclick:()=>openTask(t.id)},h('span',{text:t.title}),h('span',{class:'d num',text:taskPct(t)+'%'}),di?h('span',{class:'d '+(di.cls==='late'?'late':''),text:di.text}):null)}),
+      open.length>5?h('li',{onclick:()=>{S.f.m=m?m.id:'_none';S.view='list';render();}},h('span',{class:'stamp',text:'ดูทั้งหมด '+open.length+' งาน →'})):null)
+    :h('div',{class:'stamp',text:total?'งานเสร็จครบแล้ว':'ยังไม่มีงานที่ได้รับมอบหมาย'}));
+}
+function renderTeam(){
+  const all=taskList();const ms=memberList();
+  const unassigned=all.filter(t=>!t.assignee||!S.members[t.assignee]);
+  const grid=h('div',{class:'team'},ms.map(m=>memberCard(m,all.filter(t=>t.assignee===m.id))),unassigned.length?memberCard(null,unassigned):null);
+  if(S.canWrite&&S.mode!=='loading')grid.append(addMemberForm());
+  return grid;
+}
+const emailOk=v=>!v||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+function addMemberForm(){
+  const name=h('input',{id:'am-name',placeholder:'เช่น สมศรี',maxlength:'60'});
+  const role=h('input',{id:'am-role',placeholder:'เช่น ฝ่ายขาย',maxlength:'60'});
+  const email=h('input',{id:'am-email',type:'email',placeholder:'name@company.com',maxlength:'120',value:!Object.keys(S.members).length&&S.me?S.me:''});
+  return h('form',{class:'addm',onsubmit:async e=>{e.preventDefault();const n=name.value.trim();if(!n){name.focus();return;}
+    const em=email.value.trim();if(!emailOk(em)){email.focus();toast('รูปแบบอีเมลไม่ถูกต้อง');return;}
+    const ok=await write('members',uid('m'),{name:n,role:role.value.trim(),email:em,color:COLORS[Object.keys(S.members).length%COLORS.length],createdAt:Date.now()});
+    if(ok)toast('เพิ่ม '+n+' แล้ว');}},
+    h('h3',{text:'เพิ่มสมาชิกทีม'}),
+    h('div',{class:'field'},h('label',{for:'am-name',text:'ชื่อ'}),name),
+    h('div',{class:'field'},h('label',{for:'am-role',text:'ตำแหน่ง / หน้าที่'}),role),
+    h('div',{class:'field'},h('label',{for:'am-email',text:'อีเมล (ใช้ส่งแจ้งเตือน)'}),email),
+    h('div',null,h('button',{class:'btn primary',type:'submit',text:'เพิ่มสมาชิก'})));
+}
+function renderWelcome(){
+  return h('div',{class:'welcome'},
+    h('h2',{text:'เริ่มติดตามงานของทีมได้ในสามขั้นตอน'}),
+    h('ol',null,h('li',{text:'เพิ่มตัวคุณเองเป็นสมาชิกคนแรก (ใช้อีเมลที่ล็อกอินอยู่) แล้วเพิ่มรายชื่อและอีเมลของทีม เฉพาะอีเมลในรายชื่อเท่านั้นที่เข้าระบบได้'}),h('li',{text:'สร้างงาน กำหนดวันที่มอบหมาย วันที่คาดว่าจะแล้วเสร็จ งบประมาณ และแบ่งเฟสพร้อมน้ำหนักรวม 100%'}),h('li',{text:'ผู้รับผิดชอบรายงานความก้าวหน้า ปัญหา/อุปสรรค และแนบเอกสาร'})),
+    S.canWrite?h('div',{class:'row'},
+      h('button',{class:'btn primary',text:'เพิ่มสมาชิกทีม',onclick:()=>{S.view='team';render();const i=document.getElementById('am-name');if(i)i.focus();}}),
+      h('button',{class:'btn',text:'ลองด้วยข้อมูลตัวอย่าง',onclick:()=>seedSample(false)})):h('p',{class:'stamp',text:'ยังไม่มีข้อมูล และบัญชีนี้มีสิทธิ์ดูอย่างเดียว'}));
+}
+
+// ---------- actions ----------
+function setStatus(id,st){
+  const t=S.tasks[id];if(!t)return;
+  write('tasks',id,{status:st,updatedAt:Date.now(),completedAt:st==='done'?(t.completedAt||Date.now()):null});
+  if(st==='done')toast('ปิดงาน “'+(t.title||'')+'” แล้ว');
+}
+async function deleteReport(r){
+  if(sb){const paths=(r.files||[]).map(f=>f.path).filter(Boolean);if(paths.length)await sb.storage.from('attachments').remove(paths);}
+  if(await write('reports',r.id,null)){toast('ลบรายงานแล้ว');if(S.openTaskId)openTask(S.openTaskId,'reports');}
+}
+function closeModal(){S.openTaskId=null;document.getElementById('modalRoot').replaceChildren();}
+function modal(title,body,actions,wide){
+  const root=document.getElementById('modalRoot');
+  const ov=h('div',{class:'overlay',onclick:e=>{if(e.target===ov)closeModal()}},
+    h('div',{class:'modal'+(wide?' wide':''),role:'dialog','aria-modal':'true','aria-label':title},h('div',{class:'mhead'},h('h2',{text:title}),h('button',{class:'btn ghost',onclick:closeModal,'aria-label':'ปิด',text:'✕'})),body,actions?h('div',{class:'actions'},actions):null));
+  root.replaceChildren(ov);
+  return ov;
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+function armDelete(btn,label,fn){
+  let armed=false;btn.textContent=label;
+  btn.addEventListener('click',e=>{e.stopPropagation();if(!armed){armed=true;btn.classList.add('armed');btn.textContent='กดอีกครั้งเพื่อยืนยัน';setTimeout(()=>{armed=false;btn.classList.remove('armed');btn.textContent=label;},4000);}else fn();});
+  return btn;
+}
+function phaseEditor(initial,taskId,ro){
+  let rows=initial.map(p=>Object.assign({},p));
+  const wrap=h('div',{class:'phases'});
+  const draw=()=>{
+    const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);
+    wrap.replaceChildren(
+      rows.length?h('div',{class:'tablewrap'},h('table',null,
+        h('thead',null,h('tr',null,['เฟส / งานย่อย','น้ำหนัก (%)','วันที่คาดว่าจะแล้วเสร็จ','ความก้าวหน้า',''].map(x=>h('th',{text:x})))),
+        h('tbody',null,rows.map((p,i)=>{
+          const pc=taskId?latestPct(taskId,p.id):0;
+          return h('tr',null,
+            h('td',null,h('input',{class:'cell',value:p.name||'',placeholder:'ชื่อเฟส',disabled:ro,'aria-label':'ชื่อเฟส',oninput:e=>{p.name=e.target.value}})),
+            h('td',null,h('input',{class:'cell num',type:'number',min:'0',max:'100',step:'1',value:String(p.weight??''),disabled:ro,'aria-label':'น้ำหนัก',style:'width:80px',oninput:e=>{p.weight=Number(e.target.value)||0;updTotal();}})),
+            h('td',null,h('input',{class:'cell',type:'date',value:p.due||'',disabled:ro,'aria-label':'วันที่คาดว่าจะแล้วเสร็จของเฟส',oninput:e=>{p.due=e.target.value}})),
+            h('td',{style:'min-width:100px'},h('div',{class:'pct'},bar(pc),h('span',{class:'num',text:pc+'%'}))),
+            h('td',null,ro?null:h('button',{class:'btn ghost small',type:'button',text:'ลบ',onclick:()=>{rows.splice(i,1);draw();}})));
+        })))):h('div',{class:'stamp',text:'ยังไม่ได้แบ่งเฟส งานนี้จะคิดความก้าวหน้าจากรายงานระดับทั้งงาน'}),
+      h('div',{class:'row',style:'align-items:center'},
+        ro?null:h('button',{class:'btn',type:'button',text:'+ เพิ่มเฟส/งานย่อย',onclick:()=>{rows.push({id:uid('p'),name:'',weight:0,due:''});draw();const ins=wrap.querySelectorAll('input.cell');if(ins.length)ins[ins.length-3].focus();}}),
+        rows.length&&!ro?h('button',{class:'btn',type:'button',text:'แบ่งน้ำหนักเท่ากัน',onclick:()=>{const n=rows.length;const b=Math.floor(100/n);rows.forEach((p,i)=>p.weight=b+(i<100-b*n?1:0));draw();}}):null,
+        rows.length?h('span',{class:'total',id:'ph-total'}):null));
+    updTotal();
+  };
+  const updTotal=()=>{const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');};
+  draw();
+  return{el:wrap,get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,due:p.due||''})),valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
+}
+function reportForm(t){
+  const ph=phasesOf(t);
+  const date=h('input',{id:'rp-date',type:'date',value:today()});
+  const phase=h('select',{id:'rp-phase'},ph.length?ph.map(p=>h('option',{value:p.id,text:p.name+' ('+p.weight+'%)'})):h('option',{value:'',text:'ทั้งงาน'}));
+  const pct=h('input',{id:'rp-pct',type:'number',min:'0',max:'100',step:'1',class:'num',style:'width:90px'});
+  const range=h('input',{type:'range',min:'0',max:'100',step:'5','aria-label':'เลื่อนเปอร์เซ็นต์'});
+  const syncFromPhase=()=>{const v=latestPct(t.id,phase.value);pct.value=String(v);range.value=String(v);};
+  phase.addEventListener('change',syncFromPhase);syncFromPhase();
+  pct.addEventListener('input',()=>{range.value=pct.value;});range.addEventListener('input',()=>{pct.value=range.value;});
+  const detail=h('textarea',{id:'rp-detail',placeholder:'ทำอะไรไปแล้วบ้างในรอบนี้'});
+  const issues=h('textarea',{id:'rp-issues',placeholder:'ปัญหาหรืออุปสรรคที่พบ และความช่วยเหลือที่ต้องการ (ถ้ามี)'});
+  const files=S.mode==='db'?h('input',{id:'rp-files',type:'file',multiple:true}):null;
+  const link=h('input',{id:'rp-link',type:'url',placeholder:'https://drive.google.com/…'});
+  const submit=h('button',{class:'btn primary',type:'submit',text:'บันทึกรายงาน'});
+  const f=h('form',{class:'repform',onsubmit:async e=>{
+    e.preventDefault();
+    if(!date.value){date.focus();return;}
+    const lk=link.value.trim();if(lk&&!/^https?:\/\//i.test(lk)){link.focus();toast('ลิงก์ต้องขึ้นต้นด้วย https://');return;}
+    submit.disabled=true;submit.textContent='กำลังบันทึก…';
+    const up=[];
+    if(files&&files.files.length){
+      for(const file of files.files){
+        if(file.size>50*1024*1024){toast('ไฟล์ '+file.name+' ใหญ่เกิน 50 MB');continue;}
+        try{up.push(await uploadFile(t.id,file));}
+        catch(err){toast('อัปโหลด '+file.name+' ไม่สำเร็จ: '+(err.message||''));}
+      }
+    }
+    const ok=await write('reports',uid('r'),{taskId:t.id,phaseId:phase.value,date:date.value,percent:clampPct(pct.value),detail:detail.value.trim(),issues:issues.value.trim(),files:up,link:lk,by:S.me||'',createdAt:Date.now()});
+    if(ok){
+      const upd={updatedAt:Date.now()};if((t.status||'todo')==='todo')upd.status='doing';
+      await write('tasks',t.id,upd);
+      toast('บันทึกรายงานแล้ว');openTask(t.id,'reports');
+    }else{submit.disabled=false;submit.textContent='บันทึกรายงาน';}
+  }},
+    h('h3',{text:'รายงานความก้าวหน้าใหม่'}),
+    h('div',{class:'row'},
+      h('div',{class:'field'},h('label',{for:'rp-date',text:'วันที่รายงาน'}),date),
+      h('div',{class:'field'},h('label',{for:'rp-phase',text:'เฟส/งานย่อย'}),phase),
+      h('div',{class:'field'},h('label',{for:'rp-pct',text:'ความก้าวหน้า (เต็ม 100%)'}),h('div',{class:'row',style:'align-items:center;flex-wrap:nowrap'},pct,range))),
+    h('div',{class:'field'},h('label',{for:'rp-detail',text:'รายละเอียดผลการดำเนินงาน'}),detail),
+    h('div',{class:'field'},h('label',{for:'rp-issues',text:'ปัญหา/อุปสรรค'}),issues),
+    h('div',{class:'row'},
+      files?h('div',{class:'field'},h('label',{for:'rp-files',text:'แนบเอกสาร (Word, Excel, PDF, รูปภาพ ฯลฯ ไม่เกิน 50 MB)'}),files):null,
+      h('div',{class:'field'},h('label',{for:'rp-link',text:'หรือใส่ลิงก์เอกสาร (Drive, OneDrive ฯลฯ)'}),link)),
+    h('div',null,submit));
+  return f;
+}
+function openTask(id,tab){
+  const t=id?Object.assign({id},S.tasks[id]):null;if(id&&!S.tasks[id])return;
+  S.openTaskId=id||null;
+  const ro=!S.canWrite;
+  const title=h('input',{id:'tk-title',value:t?t.title||'':'',maxlength:'160',disabled:ro,placeholder:'เช่น พัฒนาระบบชำระเงินออนไลน์'});
+  const desc=h('textarea',{id:'tk-desc',disabled:ro,placeholder:'ขอบเขตงาน ผลลัพธ์ที่ต้องการ'});desc.value=t?t.desc||'':'';
+  const as=h('select',{id:'tk-as',disabled:ro},h('option',{value:'',text:'— ยังไม่มอบหมาย —'}),memberList().map(m=>h('option',{value:m.id,text:m.name+(m.email?'':' (ไม่มีอีเมล)')})));as.value=t&&S.members[t.assignee]?t.assignee:(S.f.m&&S.f.m!=='_none'?S.f.m:'');
+  const st=h('select',{id:'tk-st',disabled:ro},STATUSES.map(s=>h('option',{value:s.k,text:s.t})));st.value=t?t.status||'todo':'todo';
+  const pr=h('select',{id:'tk-pr',disabled:ro},Object.entries(PRI).map(([k,v])=>h('option',{value:k,text:v.t})));pr.value=t?t.priority||'med':'med';
+  const assigned=h('input',{id:'tk-assigned',type:'date',value:t?t.assignedDate||'':today(),disabled:ro});
+  const due=h('input',{id:'tk-due',type:'date',value:t?t.due||'':'',disabled:ro});
+  const budget=h('input',{id:'tk-budget',type:'number',min:'0',step:'0.01',class:'num',value:t&&t.budget?String(t.budget):'',disabled:ro,placeholder:'0'});
+  const plan=h('input',{id:'tk-plan',value:t?t.planRef||'':'',maxlength:'200',disabled:ro,placeholder:'เช่น แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 2 (ถ้ามี)'});
+  const phases=phaseEditor(t?phasesOf(t):[],t?t.id:null,ro);
+  const pctNow=t?taskPct(t):0;
+  const info=h('div',{class:'stackv'},
+    h('div',{class:'field'},h('label',{for:'tk-title',text:'ชื่องาน'}),title),
+    h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-as',text:'ผู้รับผิดชอบ'}),as),h('div',{class:'field'},h('label',{for:'tk-st',text:'สถานะ'}),st),h('div',{class:'field'},h('label',{for:'tk-pr',text:'ความสำคัญ'}),pr)),
+    h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-assigned',text:'วันที่มอบหมาย'}),assigned),h('div',{class:'field'},h('label',{for:'tk-due',text:'วันที่คาดว่าจะแล้วเสร็จ'}),due),h('div',{class:'field'},h('label',{for:'tk-budget',text:'งบประมาณ (บาท)'}),budget)),
+    h('div',{class:'field'},h('label',{for:'tk-plan',text:'อ้างอิงแผนวิสาหกิจ (ถ้ามี)'}),plan),
+    h('div',{class:'field'},h('label',{for:'tk-desc',text:'รายละเอียดงาน'}),desc),
+    h('div',{class:'field'},h('label',{text:'เฟส / งานย่อย (น้ำหนักรวมต้องเท่ากับ 100%)'}),phases.el),
+    t?h('div',{class:'stamp',text:'ความก้าวหน้ารวม '+pctNow+'%'+(t.updatedAt?' · แก้ไขล่าสุด '+new Date(t.updatedAt).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}):'')}):null,
+    !memberList().length&&!ro?h('div',{class:'stamp',text:'ยังไม่มีสมาชิกทีม เพิ่มได้ที่แท็บ “ทีม”'}):null);
+  const save=async()=>{
+    const v=title.value.trim();if(!v){title.focus();toast('ใส่ชื่องานก่อนบันทึก');return;}
+    if(assigned.value&&due.value&&due.value<assigned.value){due.focus();toast('วันที่คาดว่าจะแล้วเสร็จต้องไม่ก่อนวันที่มอบหมาย');return;}
+    if(!phases.valid()){toast('น้ำหนักของเฟสต้องรวมได้ 100%');return;}
+    const ph=phases.get();if(ph.some(p=>!p.name)){toast('ใส่ชื่อเฟสให้ครบทุกแถว');return;}
+    const now=Date.now();const data={title:v,desc:desc.value.trim(),assignee:as.value,status:st.value,priority:pr.value,assignedDate:assigned.value,due:due.value,
+      budget:Number(budget.value)||0,planRef:plan.value.trim(),phases:ph,updatedAt:now,completedAt:st.value==='done'?((t&&t.completedAt)||now):null};
+    if(!t)data.createdAt=now;
+    const nid=id||uid('t');
+    const ok=await write('tasks',nid,data);
+    if(ok){toast(t?'บันทึกแล้ว':'สร้างงานแล้ว · เพิ่มรายงานความก้าวหน้าได้ในแท็บรายงาน');if(t)closeModal();else openTask(nid,'reports');}
+  };
+  const reps=t?reportsFor(t.id):[];
+  const tabs=t?h('div',{class:'tabs mtabs',role:'tablist'},
+    h('button',{role:'tab','aria-selected':String(tab!=='reports'),type:'button',text:'ข้อมูลงาน',onclick:()=>openTask(id,'info')}),
+    h('button',{role:'tab','aria-selected':String(tab==='reports'),type:'button',text:'รายงานความก้าวหน้า ('+reps.length+')',onclick:()=>openTask(id,'reports')})):null;
+  if(t&&tab==='reports'){
+    const body=h('div',{class:'stackv'},tabs,
+      h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),
+      phasesOf(t).length?h('div',{class:'stamp',text:'ความก้าวหน้ารวมคิดจาก น้ำหนักเฟส × % ล่าสุดของแต่ละเฟส'}):null,
+      reportTable(reps,false),
+      ro?null:reportForm(t));
+    modal(t.title||'รายละเอียดงาน',body,null,true);
+    return;
+  }
+  const acts=ro?[h('button',{class:'btn',onclick:closeModal,text:'ปิด'})]:[
+    t?armDelete(h('button',{class:'btn danger'}),'ลบงาน',async()=>{for(const r of reportsFor(id))await deleteReport(r);if(await write('tasks',id,null)){closeModal();toast('ลบงานแล้ว');}}):null,
+    h('button',{class:'btn',onclick:closeModal,text:'ยกเลิก'}),
+    h('button',{class:'btn primary',onclick:save,text:t?'บันทึก':'สร้างงาน'})];
+  const ov=modal(t?(t.title||'รายละเอียดงาน'):'งานใหม่',h('div',{class:'stackv'},tabs,info),acts,true);
+  if(!t)title.focus();
+}
+function openMember(id){
+  const m=S.members[id];if(!m)return;
+  const name=h('input',{id:'mm-name',value:m.name||'',maxlength:'60'});
+  const role=h('input',{id:'mm-role',value:m.role||'',maxlength:'60'});
+  const email=h('input',{id:'mm-email',type:'email',value:m.email||'',maxlength:'120',placeholder:'name@company.com'});
+  const colors=h('div',{class:'row',role:'radiogroup','aria-label':'สีประจำตัว'});let color=m.color||COLORS[0];
+  const drawColors=()=>colors.replaceChildren(...COLORS.map(c=>h('button',{type:'button',class:'av','aria-label':'สี '+c,'aria-checked':String(c===color),role:'radio',style:'background:'+c+';border:0;cursor:pointer;'+(c===color?'outline:2px solid var(--ink);outline-offset:2px':''),onclick:()=>{color=c;drawColors();}})));
+  drawColors();
+  const n=Object.values(S.tasks).filter(t=>t.assignee===id).length;
+  modal('แก้ไขสมาชิก',h('div',{class:'stackv'},
+    h('div',{class:'field'},h('label',{for:'mm-name',text:'ชื่อ'}),name),
+    h('div',{class:'field'},h('label',{for:'mm-role',text:'ตำแหน่ง / หน้าที่'}),role),
+    h('div',{class:'field'},h('label',{for:'mm-email',text:'อีเมล (ใช้ส่งแจ้งเตือน)'}),email),
+    h('div',{class:'field'},h('label',{text:'สีประจำตัว'}),colors),
+    n?h('div',{class:'stamp',text:'ถ้าลบสมาชิกนี้ งาน '+n+' งานจะกลายเป็น “ยังไม่มอบหมาย”'}):null),
+    [armDelete(h('button',{class:'btn danger'}),'ลบสมาชิก',async()=>{
+        for(const [tid,t] of Object.entries(S.tasks))if(t.assignee===id)await write('tasks',tid,{assignee:'',updatedAt:Date.now()});
+        if(await write('members',id,null)){closeModal();toast('ลบสมาชิกแล้ว');}}),
+     h('button',{class:'btn',onclick:closeModal,text:'ยกเลิก'}),
+     h('button',{class:'btn primary',text:'บันทึก',onclick:async()=>{const v=name.value.trim();if(!v){name.focus();return;}
+        const em=email.value.trim();if(!emailOk(em)){email.focus();toast('รูปแบบอีเมลไม่ถูกต้อง');return;}
+        if(await write('members',id,{name:v,role:role.value.trim(),email:em,color})){closeModal();toast('บันทึกแล้ว');}}})]);
+  name.focus();
+}
+
+// ---------- wiring ----------
+document.querySelectorAll('.tabs button[data-view]').forEach(b=>b.addEventListener('click',()=>{S.view=b.dataset.view;try{localStorage.setItem('teamboard-view',S.view)}catch(e){}render();}));
+try{const v=localStorage.getItem('teamboard-view');if(['board','list','reports','team'].includes(v))S.view=v;}catch(e){}
+document.getElementById('newTask').addEventListener('click',()=>openTask(null));
+document.getElementById('signOut').addEventListener('click',()=>sb&&sb.auth.signOut());
+document.getElementById('fq').addEventListener('input',e=>{S.f.q=e.target.value;render();e.target.focus();});
+document.getElementById('fm').addEventListener('change',e=>{S.f.m=e.target.value;render();});
+document.getElementById('fp').addEventListener('change',e=>{S.f.p=e.target.value;render();});
+document.getElementById('fo').addEventListener('change',e=>{S.f.o=e.target.checked;render();});
+boot();
+})();
+</script>
+</body>
+</html>
