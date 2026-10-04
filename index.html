@@ -756,7 +756,7 @@ function renderReportsView(){
       h('div',{class:'xgrid'},
         xcard('1','รายงานสรุปสำหรับผู้บริหาร','ภาพรวมสั้น ๆ: ตัวเลขสรุป งานที่ไม่เป็นไปตามแผน ตารางทุกงาน ปัญหา/อุปสรรค และสรุปรายผู้รับผิดชอบ','เปิดรายงานสรุป',printExecSummary,true),
         xcard('2','รายงานความก้าวหน้าแต่ละงาน (ฉบับละเอียด)','หนึ่งหน้าต่องาน: ข้อมูลงาน เฟสและผลแล้วเสร็จ รายงานทุกครั้ง พร้อมลิงก์เปิดเอกสารแนบ','เปิดรายงานละเอียด',()=>printTaskReport(list.map(t=>t.id))))),
-    h('div',{class:'stamp',text:'รายงานความก้าวหน้า '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),
+    h('div',{class:'stamp',text:'โครงการทั้งหมด '+list.length+' โครงการ · มีปัญหา/อุปสรรค '+new Set(reps.filter(r=>r.issues).map(r=>r.taskId)).size+' โครงการ · ยังไม่มีรายงาน '+list.filter(t=>!reps.some(r=>r.taskId===t.id)).length+' โครงการ · เพิ่มรายงานได้จากปุ่ม “เปิดงาน”'}),
     h('div',{class:'rep-tools'},h('div',{class:'stamp',text:'กดที่ชื่อโครงการเพื่อดูรายละเอียดเฟสและรายงาน'}),
       h('button',{class:'btn small',type:'button',text:'แสดงทั้งหมด',onclick:()=>{list.forEach(t=>S.open.add(t.id));render();}}),
       h('button',{class:'btn small',type:'button',text:'ย่อทั้งหมด',onclick:()=>{S.open.clear();render();}})),
