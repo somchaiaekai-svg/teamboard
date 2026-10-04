@@ -733,7 +733,8 @@ function renderReportsView(){
         h('div',{class:'task-rep-hd'},
           h('h3',{class:'title',onclick:()=>openTask(t.id,'reports'),text:t.title||'(ไม่มีชื่องาน)'}),
           h('div',{class:'who'},avatar(m),h('span',{text:m?m.name:'ยังไม่มอบหมาย'})),
-          di?h('span',{class:'chip '+di.cls,text:di.text}):null,
+          (()=>{const c=currentPhase(t);if(!c||c.all)return null;const pd=c.p.due?dueInfo(c.p.due,false):null;return h('span',{class:'chip '+(pd&&pd.cls||''),title:'เฟสปัจจุบัน: '+c.p.name,text:'เฟสปัจจุบัน '+(c.i+1)+'/'+c.n+' กำหนด '+(c.p.due?fmtDate(c.p.due,true):'—')+(pd&&pd.cls?' ('+pd.text+')':'')});})(),
+          t.due?h('span',{class:'chip '+(di&&di.cls||''),title:'วันที่คาดว่าจะแล้วเสร็จโครงการ',text:'โครงการเสร็จ '+fmtDate(t.due,true)+(di&&di.cls?' ('+di.text+')':'')}):null,
           planChip(t),
           t.budget||spentOf(t.id)?h('span',{class:'chip',text:'เบิกจ่าย '+baht(spentOf(t.id))+' / งบ '+baht(t.budget)+' บาท'}):null,
           h('div',{class:'pct phase-pct'},bar(pc),h('span',{class:'num',text:'รวม '+pc+'%'}))),
@@ -812,7 +813,8 @@ function taskReportHtml(t,links){
   const known=new Set(ph.map(p=>p.id));
   let s='<section class="task"><h2>'+esc(t.title||'(ไม่มีชื่องาน)')+'</h2>'+
     '<div class="grid"><div><span class="lb">ผู้รับผิดชอบ</span>'+esc(memberName(t.assignee))+'</div><div><span class="lb">สถานะ</span>'+esc(STATUS_T[t.status||'todo'])+'</div><div><span class="lb">ความสำคัญ</span>'+esc((PRI[t.priority]||PRI.med).t)+'</div>'+
-    '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบประมาณ / เบิกจ่ายแล้ว (บาท)</span>'+(t.budget?baht(t.budget):'—')+' / '+baht(spentOf(t.id))+'</div>'+
+    (()=>{const c=currentPhase(t);return c&&!c.all?'<div style="grid-column:span 3;background:#f3f3ef;padding:4px 8px;border-radius:4px"><span class="lb">เฟสปัจจุบัน</span>เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+' · ความก้าวหน้า '+c.pct+'% · <b>กำหนดแล้วเสร็จเฟสปัจจุบัน '+(c.p.due?dueCell(c.p.due,false).replace('<br>',' '):'—')+'</b> · <b>วันที่คาดว่าจะแล้วเสร็จโครงการ '+(t.due?dueCell(t.due,t.status==='done').replace('<br>',' '):'—')+'</b></div>':'';})()+
+    '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จโครงการ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบประมาณ / เบิกจ่ายแล้ว (บาท)</span>'+(t.budget?baht(t.budget):'—')+' / '+baht(spentOf(t.id))+'</div>'+
     '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div><span class="lb">ผลการดำเนินงานตามแผน</span>'+planCell(t)+'</div><div><span class="lb">อ้างอิงแผนวิสาหกิจ</span>'+esc(t.planRef||'—')+'</div></div>'+
     (t.desc?'<div><span class="muted">รายละเอียดงาน</span><div>'+nl(t.desc)+'</div></div>':'');
   if(ph.length){
@@ -850,10 +852,11 @@ function printExecSummary(){
     '<div class="kpi"><b>'+avg+'%</b>ความก้าวหน้าเฉลี่ย</div><div class="kpi"><b>'+wavg+'%</b>ความก้าวหน้าถ่วงตามงบประมาณ</div>'+
     '<div class="kpi"><b>'+baht(bud)+'</b>งบประมาณรวม (บาท)</div><div class="kpi"><b>'+baht(spent)+'</b>เบิกจ่ายแล้ว (บาท)'+(bud?' · '+Math.round(spent*100/bud)+'% ของงบ':'')+'</div></div>';
   const phaseCell=t=>{const c=currentPhase(t);if(!c)return '<span class="muted">ไม่ได้แบ่งเฟส</span>';if(c.all)return '<span class="ok">ครบทุกเฟส ('+c.n+'/'+c.n+')</span>';
-    return 'เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+'<br><span class="muted">'+c.pct+'%'+(c.p.due?' · กำหนด '+fmtDate(c.p.due,true):'')+'</span>'+(c.res.off?'<br><span class="off">'+esc(c.res.text)+'</span>':'');};
-  s+='<h2>ภาพรวมทุกโครงการ</h2><table><thead><tr><th class="n">#</th><th>โครงการ / ผู้รับผิดชอบ</th><th>วันที่เริ่มต้น</th><th>เฟสปัจจุบัน</th><th>คาดว่าจะแล้วเสร็จ</th><th>ความก้าวหน้า</th><th>ผลตามแผน</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่ายแล้ว (บาท)</th><th class="n">คงเหลือ (บาท)</th></tr></thead><tbody>'+
-    list.map((t,i)=>{const b=Number(t.budget)||0,x=sp.get(t.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'<br><span class="muted">'+esc(memberName(t.assignee))+(t.planRef?' · '+esc(t.planRef):'')+'</span></td><td>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</td><td>'+phaseCell(t)+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+pbar(pcs.get(t.id))+'</td><td>'+planCell(t)+'</td><td class="n">'+(b?baht(b):'—')+'</td><td class="n">'+baht(x)+(b?'<br><span class="muted">'+Math.round(x*100/b)+'%</span>':'')+'</td><td class="n'+(b&&x>b?' off':'')+'">'+(b?baht(b-x):'—')+'</td></tr>';}).join('')+
-    '<tr><th colspan="7" class="n">รวม</th><th class="n">'+baht(bud)+'</th><th class="n">'+baht(spent)+'</th><th class="n">'+baht(bud-spent)+'</th></tr></tbody></table>';
+    return 'เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+'<br><span class="muted">ความก้าวหน้า '+c.pct+'%</span>';};
+  const phaseDueCell=t=>{const c=currentPhase(t);if(!c||c.all)return '—';return c.p.due?dueCell(c.p.due,false):'—';};
+  s+='<h2>ภาพรวมทุกโครงการ</h2><table><thead><tr><th class="n">#</th><th>โครงการ / ผู้รับผิดชอบ</th><th>วันที่เริ่มต้น</th><th>เฟสปัจจุบัน</th><th>กำหนดแล้วเสร็จ<br>เฟสปัจจุบัน</th><th>วันที่คาดว่าจะแล้วเสร็จ<br>โครงการ</th><th>ความก้าวหน้า</th><th>ผลตามแผน</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่ายแล้ว (บาท)</th><th class="n">คงเหลือ (บาท)</th></tr></thead><tbody>'+
+    list.map((t,i)=>{const b=Number(t.budget)||0,x=sp.get(t.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'<br><span class="muted">'+esc(memberName(t.assignee))+(t.planRef?' · '+esc(t.planRef):'')+'</span></td><td>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</td><td>'+phaseCell(t)+'</td><td>'+phaseDueCell(t)+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+pbar(pcs.get(t.id))+'</td><td>'+planCell(t)+'</td><td class="n">'+(b?baht(b):'—')+'</td><td class="n">'+baht(x)+(b?'<br><span class="muted">'+Math.round(x*100/b)+'%</span>':'')+'</td><td class="n'+(b&&x>b?' off':'')+'">'+(b?baht(b-x):'—')+'</td></tr>';}).join('')+
+    '<tr><th colspan="8" class="n">รวม</th><th class="n">'+baht(bud)+'</th><th class="n">'+baht(spent)+'</th><th class="n">'+baht(bud-spent)+'</th></tr></tbody></table>';
   s+='<h2>สถานะงานตามขั้นตอน</h2><table><thead><tr>'+STATUSES.map(x=>'<th class="n">'+esc(x.t)+'</th>').join('')+'</tr></thead><tbody><tr>'+STATUSES.map(x=>'<td class="n">'+list.filter(t=>(t.status||'todo')===x.k).length+'</td>').join('')+'</tr></tbody></table>';
   const attn=late.concat(soon);
   s+='<h2>เรื่องที่ต้องติดตาม</h2>'+(attn.length?'<table><thead><tr><th>งาน</th><th>ผู้รับผิดชอบ</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th></tr></thead><tbody>'+
