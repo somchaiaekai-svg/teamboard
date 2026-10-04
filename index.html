@@ -266,6 +266,7 @@ const isoDay=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const today=()=>isoDay(new Date());
 const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return isoDay(d)};
 function dayDiff(iso){const [y,m,d]=iso.split('-').map(Number);const a=new Date(y,m-1,d);const t=new Date();t.setHours(0,0,0,0);return Math.round((a-t)/864e5);}
+function fmtStamp(ms){return new Date(ms).toLocaleString('th-TH',{day:'numeric',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function fmtDate(iso,yr){if(!iso)return '';const [y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d).toLocaleDateString('th-TH',yr?{day:'numeric',month:'short',year:'2-digit'}:{day:'numeric',month:'short'});}
 const baht=n=>(Number(n)||0).toLocaleString('th-TH',{maximumFractionDigits:2});
 const clampPct=v=>Math.max(0,Math.min(100,Math.round(Number(v)||0)));
@@ -617,7 +618,7 @@ function reportTable(reports,showTask,hidePhase){
       const t=S.tasks[r.taskId]||{};const ph=phasesOf(t).find(p=>p.id===r.phaseId);const m=S.members[t.assignee];
       const del=S.canWrite?armDelete(h('button',{class:'btn ghost small'}),'ลบ',()=>deleteReport(r)):null;
       return h('tr',null,
-        h('td',{class:'num',text:fmtDate(r.date,true)}),
+        h('td',{class:'num'},h('div',{text:fmtDate(r.date,true)}),r.createdAt?h('div',{class:'stamp',title:'วันเวลาที่บันทึก',text:'บันทึก '+fmtStamp(r.createdAt)}):null),
         showTask?h('td',{class:'title',onclick:()=>openTask(r.taskId),text:t.title||'(งานถูกลบ)'}):null,
         showTask?h('td',null,h('div',{class:'who'},avatar(m),h('span',{text:m?m.name:'—'}))):null,
         hidePhase?null:h('td',{text:ph?ph.name+' ('+ph.weight+'%)':(r.phaseId?'(เฟสถูกลบ)':'ทั้งงาน')}),
@@ -631,9 +632,10 @@ function reportTable(reports,showTask,hidePhase){
 function phaseSections(t,opts){
   opts=opts||{};
   const reps=reportsFor(t.id);const ph=phasesOf(t);
-  const groups=ph.map(p=>({p,reps:reps.filter(r=>r.phaseId===p.id)}));
+  const byRec=(a,b)=>(a.createdAt||0)-(b.createdAt||0)||(a.date||'').localeCompare(b.date||'');
+  const groups=ph.map(p=>({p,reps:reps.filter(r=>r.phaseId===p.id).sort(byRec)}));
   const known=new Set(ph.map(p=>p.id));
-  const rest=reps.filter(r=>!r.phaseId||!known.has(r.phaseId));
+  const rest=reps.filter(r=>!r.phaseId||!known.has(r.phaseId)).sort(byRec);
   if(!ph.length||rest.length)groups.push({p:null,reps:rest});
   return h('div',{class:'stackv'},groups.map(({p,reps},i)=>{
     const pc=p?latestPct(t.id,p.id):(ph.length?latestPct(t.id,''):taskPct(t));
