@@ -355,17 +355,12 @@ function balanceAfter(r){
   const used=Object.values(S.reports).filter(x=>x.taskId===r.taskId&&((x.createdAt||0)<k[0]||((x.createdAt||0)===k[0]&&(x.date||'')<=k[1]))).reduce((a,x)=>a+(Number(x.spent)||0),0);
   return b-used;
 }
-// Project budget left once this phase and the ones before it are counted.
-function balanceAfterPhase(t,p){
-  const b=projBudget(t);if(!b)return null;const ph=phasesOf(t);const i=ph.findIndex(x=>x.id===p.id);
-  return b-ph.slice(0,i+1).reduce((a,x)=>a+spentOf(t.id,x.id),0);
-}
 function phaseBudgetLine(t,p){
-  const b=Number(p.budget)||0,x=spentOf(t.id,p.id),pb=projBudget(t),left=balanceAfterPhase(t,p);
+  const b=Number(p.budget)||0,x=spentOf(t.id,p.id),pb=projBudget(t),all=spentOf(t.id),left=pb?pb-all:null;
   return h('div',{class:'budgetline'},
     h('span',null,'งบเฟสนี้ ',h('b',{text:b?baht(b):'ยังไม่กำหนด'}),b?' บาท':''),
     h('span',{class:b&&x>b?'over':''},'จ่ายในเฟสนี้ ',h('b',{text:baht(x)}),' บาท'+(b?' ('+Math.round(x*100/b)+'%)':'')),
-    left!==null?h('span',{class:left<0?'over':''},'งบโครงการคงเหลือ ',h('b',{text:baht(left)}),' บาท',h('span',{class:'stamp',text:' (งบรวม '+baht(pb)+' − จ่ายสะสมถึงเฟสนี้ '+baht(pb-left)+')'})):h('span',{class:'stamp',text:'ยังไม่ได้กำหนดงบประมาณรวมของโครงการ'}));
+    left!==null?h('span',{class:left<0?'over':''},'งบโครงการคงเหลือ ',h('b',{text:baht(left)}),' บาท',h('span',{class:'stamp',text:' (งบรวม '+baht(pb)+' − จ่ายแล้วทุกเฟส '+baht(all)+')'})):h('span',{class:'stamp',text:'ยังไม่ได้กำหนดงบประมาณรวมของโครงการ'}));
 }
 function budgetLine(b,x,label){
   const left=b-x;
@@ -849,9 +844,10 @@ function taskReportHtml(t,links){
     '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div><span class="lb">ผลการดำเนินงานตามแผน</span>'+planCell(t)+'</div><div><span class="lb">อ้างอิงแผนวิสาหกิจ</span>'+esc(t.planRef||'—')+'</div></div>'+
     (t.desc?'<div><span class="muted">รายละเอียดงาน</span><div>'+nl(t.desc)+'</div></div>':'');
   if(ph.length){
-    s+='<h3>เฟส / งานย่อย</h3><table><thead><tr><th class="n" style="width:5%">#</th><th>เฟส/งานย่อย</th><th class="n">น้ำหนัก</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่าย (บาท)</th><th class="n">งบโครงการคงเหลือ (บาท)</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th><th>ผลแล้วเสร็จ</th></tr></thead><tbody>'+
-      ph.map((p,i)=>{const pp=phasePct(t,p);const pr=phaseResult(t,p);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(p.name)+'</td><td class="n">'+p.weight+'%</td><td class="n">'+(p.budget?baht(p.budget):'—')+'</td><td class="n">'+baht(spentOf(t.id,p.id))+'</td><td class="n'+((balanceAfterPhase(t,p)||0)<0?' off':'')+'">'+(balanceAfterPhase(t,p)===null?'—':baht(balanceAfterPhase(t,p)))+'</td><td>'+(p.due?fmtDate(p.due,true):'—')+'</td><td>'+pbar(pp)+'</td><td><span class="'+resCls(pr.cls)+'">'+(pr.done?'☑ ':'☐ ')+esc(pr.text)+'</span>'+(pr.done&&pr.doneDate?'<br><span class="muted">เสร็จจริง '+fmtDate(pr.doneDate,true)+'</span>':'')+'</td></tr>';}).join('')+'</tbody></table>';
-    ph.forEach((p,i)=>{const pb=Number(p.budget)||0,px=spentOf(t.id,p.id);s+='<h3>รายงานเฟส '+(i+1)+': '+esc(p.name)+'</h3><div class="muted" style="margin-bottom:2px">งบประมาณเฟส '+(pb?baht(pb)+' บาท':'ยังไม่กำหนด')+' · เบิกจ่ายแล้ว '+baht(px)+' บาท'+(pb?' ('+Math.round(px*100/pb)+'%)':'')+(balanceAfterPhase(t,p)===null?'':' · งบโครงการคงเหลือ '+baht(balanceAfterPhase(t,p))+' บาท (งบรวม '+baht(projBudget(t))+' − จ่ายสะสมถึงเฟสนี้)')+'</div>'+repTable(reps.filter(r=>r.phaseId===p.id).sort(byRec));});
+    s+='<h3>เฟส / งานย่อย</h3><table><thead><tr><th class="n" style="width:5%">#</th><th>เฟส/งานย่อย</th><th class="n">น้ำหนัก</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่าย (บาท)</th><th class="n">งบเฟสคงเหลือ (บาท)</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th><th>ผลแล้วเสร็จ</th></tr></thead><tbody>'+
+      ph.map((p,i)=>{const pp=phasePct(t,p);const pr=phaseResult(t,p);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(p.name)+'</td><td class="n">'+p.weight+'%</td><td class="n">'+(p.budget?baht(p.budget):'—')+'</td><td class="n">'+baht(spentOf(t.id,p.id))+'</td><td class="n'+((Number(p.budget)||0)-spentOf(t.id,p.id)<0?' off':'')+'">'+(p.budget?baht((Number(p.budget)||0)-spentOf(t.id,p.id)):'—')+'</td><td>'+(p.due?fmtDate(p.due,true):'—')+'</td><td>'+pbar(pp)+'</td><td><span class="'+resCls(pr.cls)+'">'+(pr.done?'☑ ':'☐ ')+esc(pr.text)+'</span>'+(pr.done&&pr.doneDate?'<br><span class="muted">เสร็จจริง '+fmtDate(pr.doneDate,true)+'</span>':'')+'</td></tr>';}).join('')+
+      (projBudget(t)?'<tr><th colspan="3" class="n">รวมทั้งโครงการ</th><th class="n">'+baht(projBudget(t))+'</th><th class="n">'+baht(spentOf(t.id))+'</th><th class="n'+(projBudget(t)-spentOf(t.id)<0?' off':'')+'">'+baht(projBudget(t)-spentOf(t.id))+'</th><th colspan="3" class="muted">งบโครงการคงเหลือ = งบรวม − จ่ายแล้วทุกเฟส</th></tr>':'')+'</tbody></table>';
+    ph.forEach((p,i)=>{const pb=Number(p.budget)||0,px=spentOf(t.id,p.id);s+='<h3>รายงานเฟส '+(i+1)+': '+esc(p.name)+'</h3><div class="muted" style="margin-bottom:2px">งบประมาณเฟส '+(pb?baht(pb)+' บาท':'ยังไม่กำหนด')+' · เบิกจ่ายแล้ว '+baht(px)+' บาท'+(pb?' ('+Math.round(px*100/pb)+'%)':'')+(projBudget(t)?' · งบโครงการคงเหลือ '+baht(projBudget(t)-spentOf(t.id))+' บาท (งบรวม '+baht(projBudget(t))+' − จ่ายแล้วทุกเฟส '+baht(spentOf(t.id))+')':'')+'</div>'+repTable(reps.filter(r=>r.phaseId===p.id).sort(byRec));});
     const rest=reps.filter(r=>!r.phaseId||!known.has(r.phaseId)).sort(byRec);
     if(rest.length)s+='<h3>รายงานที่ไม่ระบุเฟส</h3>'+repTable(rest);
   }else s+='<h3>รายงานความก้าวหน้า</h3>'+repTable(reps.slice().sort(byRec));
