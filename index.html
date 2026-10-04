@@ -337,8 +337,11 @@ async function loadAll(){
     S[c]=Object.fromEntries(data.map(r=>[r.id,r.data]));
   }
 }
+let rtChannel=null;
 function subscribeRealtime(){
-  sb.channel('teamboard').on('postgres_changes',{event:'*',schema:'public'},p=>{
+  if(rtChannel)return;
+  rtChannel=sb.channel('teamboard-'+Math.random().toString(36).slice(2,8));
+  rtChannel.on('postgres_changes',{event:'*',schema:'public'},p=>{
     const c=p.table;if(!COLS.includes(c))return;
     if(p.eventType==='DELETE'){if(p.old&&p.old.id)delete S[c][p.old.id];}
     else if(p.new&&p.new.id)S[c][p.new.id]=p.new.data;
@@ -360,6 +363,7 @@ async function boot(){
   else{S.mode='login';render();}
 }
 async function start(){
+  if(S.started)return;S.started=true;
   S.me=S.session.user.email||'';
   document.getElementById('who').hidden=false;
   document.getElementById('whoEmail').textContent=S.me;
@@ -367,7 +371,8 @@ async function start(){
     const {data:ok,error}=await sb.rpc('am_i_member');
     if(error)throw error;
     if(!ok){S.mode='notmember';render();return;}
-    await loadAll();S.mode='db';subscribeRealtime();
+    await loadAll();S.mode='db';
+    try{subscribeRealtime();}catch(e){console.warn('realtime unavailable',e);}
   }catch(e){console.error(e);S.mode='error';S.err=e.message||String(e);}
   render();
 }
