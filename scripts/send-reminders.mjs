@@ -48,7 +48,7 @@ for (const [id, t] of Object.entries(tasks)) {
   const items = [];
   if (t.due && dayDiff(t.due) <= remindDays) items.push({ label: t.title, due: t.due, n: dayDiff(t.due) });
   for (const p of Array.isArray(t.phases) ? t.phases : []) {
-    if (p.due && latestPct(id, p.id) < 100 && dayDiff(p.due) <= remindDays)
+    if (p.due && !p.done && latestPct(id, p.id) < 100 && dayDiff(p.due) <= remindDays)
       items.push({ label: `${t.title} › ${p.name}`, due: p.due, n: dayDiff(p.due) });
   }
   if (items.length) (byMember[t.assignee] ||= { m, items: [] }).items.push(...items);
