@@ -200,6 +200,7 @@ td.num,th,.who span{white-space:nowrap}
   .tabs{order:3;width:100%}.tabs button{flex:1}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.rep-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.rep-tools>:first-child{flex:1 1 220px}
 </style>
 
 </head>
@@ -661,7 +662,9 @@ function renderReportsView(){
   const reps=Object.values(S.reports).filter(r=>ids.has(r.taskId));
   const issues=reps.filter(r=>r.issues).length;
   if(!list.length)return h('div',{class:'empty-col',text:'ไม่พบงานตามตัวกรองนี้'});
-  return h('div',{class:'stackv'},h('div',{class:'stamp',text:'รายงานทั้งหมด '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),
+  return h('div',{class:'stackv'},h('div',{class:'rep-tools'},h('div',{class:'stamp',text:'รายงานทั้งหมด '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),
+    h('button',{class:'btn primary small',type:'button',text:'สรุปรายงานผู้บริหาร (PDF)',onclick:printExecSummary}),
+    h('button',{class:'btn small',type:'button',text:'รายงานทุกงาน (PDF)',onclick:()=>printTaskReport(list.map(t=>t.id))})),
     list.map(t=>{const m=S.members[t.assignee];const pc=taskPct(t);const di=dueInfo(t.due,t.status==='done');
       return h('article',{class:'task-rep'},
         h('div',{class:'task-rep-hd'},
@@ -671,6 +674,115 @@ function renderReportsView(){
           t.budget?h('span',{class:'chip',text:'งบ '+baht(t.budget)+' บาท'}):null,
           h('div',{class:'pct phase-pct'},bar(pc),h('span',{class:'num',text:'รวม '+pc+'%'}))),
         phaseSections(t));}));
+}
+// ---------- PDF / print reports ----------
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nl=s=>esc(s).replace(/\n/g,'<br>');
+const PRINT_CSS=`@page{size:A4;margin:14mm 12mm}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:10.5pt;color:#1d1d1b;margin:0;line-height:1.45}
+h1,h2,h3{font-family:'Bai Jamjuree','IBM Plex Sans Thai',sans-serif;margin:0}
+h1{font-size:18pt}h2{font-size:13pt;margin:16px 0 6px;padding-bottom:3px;border-bottom:2px solid #1d1d1b}h3{font-size:11.5pt;margin:12px 0 4px}
+.doc-hd{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:3px solid #1d1d1b;padding-bottom:8px;margin-bottom:10px}
+.muted{color:#666;font-size:9pt}
+table{width:calc(100% - 1px);border-collapse:collapse;margin:4px 0 8px}
+th,td{border:1px solid #bbb;padding:4px 6px;vertical-align:top;text-align:left}
+th{background:#ececE8;font-weight:600;font-size:9.5pt}
+td.n,th.n{text-align:right;white-space:nowrap}
+tr{break-inside:avoid}thead{display:table-header-group}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}
+.kpi{border:1px solid #bbb;border-radius:6px;padding:8px}
+.kpi b{display:block;font-family:'Bai Jamjuree',sans-serif;font-size:17pt;line-height:1.1}
+.kpi.alert{border-color:#b3261e;color:#b3261e}
+.bar{display:inline-block;width:70px;height:7px;background:#e3e3df;border-radius:4px;vertical-align:middle;margin-right:5px;overflow:hidden}
+.bar i{display:block;height:100%;background:#2f6db3}
+.late{color:#b3261e;font-weight:600}.soon{color:#a66300;font-weight:600}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 16px;margin:6px 0}
+.grid .lb{color:#666;font-size:9pt;display:block}
+.task{break-before:page}.task:first-of-type{break-before:auto}
+.issue{color:#8a1c14}
+ul{margin:4px 0;padding-left:18px}
+.sign{display:flex;justify-content:space-around;margin-top:36px;text-align:center}
+.sign div{width:40%}.sign p{border-top:1px dotted #444;padding-top:4px;margin-top:40px}
+.noprint{position:fixed;top:8px;right:8px}
+.noprint button{font:inherit;padding:6px 14px;border-radius:6px;border:1px solid #1d1d1b;background:#1d1d1b;color:#fff;cursor:pointer}
+@media screen{body{max-width:1000px;margin:56px auto 32px;padding:0 16px}}
+@media print{.noprint{display:none}}`;
+const pbar=p=>'<span class="bar"><i style="width:'+p+'%"></i></span>'+p+'%';
+function dueCell(due,done){if(!due)return '—';const di=dueInfo(due,done);return fmtDate(due,true)+(di&&di.cls?'<br><span class="'+(di.cls==='late'?'late':'soon')+'">'+esc(di.text)+'</span>':'');}
+function memberName(id){const m=S.members[id];return m?m.name:'ยังไม่มอบหมาย';}
+function nowStamp(){return new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});}
+function filterNote(){const f=[];if(S.f.q)f.push('ค้นหา “'+S.f.q+'”');if(S.f.m)f.push('ผู้รับผิดชอบ: '+(S.f.m==='_none'?'ยังไม่มอบหมาย':memberName(S.f.m)));if(S.f.p)f.push('ความสำคัญ: '+(PRI[S.f.p]||{}).t);if(S.f.o)f.push('เฉพาะงานเกินกำหนด');return f.length?'ตัวกรอง: '+f.join(' · '):'ทุกงาน';}
+function openPrint(title,body){
+  const w=window.open('','_blank');
+  if(!w){toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้');return;}
+  w.document.open();
+  w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+esc(title)+'</title>'+
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;600&display=swap">'+
+    '<style>'+PRINT_CSS+'</style></head><body><div class="noprint"><button onclick="window.print()">บันทึกเป็น PDF / พิมพ์</button></div>'+body+'</body></html>');
+  w.document.close();
+  const go=()=>setTimeout(()=>{try{w.focus();w.print();}catch(e){}},300);
+  if(w.document.fonts&&w.document.fonts.ready)w.document.fonts.ready.then(go);else w.onload=go;
+}
+function docHeader(title,sub){return '<div class="doc-hd"><div><h1>'+esc(title)+'</h1><div class="muted">'+esc(sub)+'</div></div><div class="muted" style="text-align:right">บอร์ดติดตามงานทีม<br>พิมพ์เมื่อ '+esc(nowStamp())+'</div></div>';}
+function taskReportHtml(t){
+  const pc=taskPct(t);const ph=phasesOf(t);const reps=reportsFor(t.id);
+  const byRec=(a,b)=>(a.createdAt||0)-(b.createdAt||0)||(a.date||'').localeCompare(b.date||'');
+  const files=r=>{const a=(r.files||[]).map(f=>'📎 '+esc(f.name||'ไฟล์แนบ'));if(r.link&&/^https?:\/\//i.test(r.link))a.push('🔗 '+esc(r.link));return a.length?a.join('<br>'):'—';};
+  const repTable=list=>list.length?'<table><thead><tr><th style="width:15%">วันที่รายงาน</th><th class="n" style="width:11%">ความก้าวหน้า</th><th>รายละเอียดผลการดำเนินงาน</th><th style="width:22%">ปัญหา/อุปสรรค</th><th style="width:17%">เอกสารแนบ</th></tr></thead><tbody>'+
+    list.map(r=>'<tr><td>'+fmtDate(r.date,true)+(r.createdAt?'<br><span class="muted">บันทึก '+esc(fmtStamp(r.createdAt))+'</span>':'')+'</td><td class="n">'+clampPct(r.percent)+'%</td><td>'+(nl(r.detail)||'—')+'</td><td class="'+(r.issues?'issue':'')+'">'+(nl(r.issues)||'—')+'</td><td>'+files(r)+'</td></tr>').join('')+'</tbody></table>':'<div class="muted">ยังไม่มีรายงาน</div>';
+  const known=new Set(ph.map(p=>p.id));
+  let s='<section class="task"><h2>'+esc(t.title||'(ไม่มีชื่องาน)')+'</h2>'+
+    '<div class="grid"><div><span class="lb">ผู้รับผิดชอบ</span>'+esc(memberName(t.assignee))+'</div><div><span class="lb">สถานะ</span>'+esc(STATUS_T[t.status||'todo'])+'</div><div><span class="lb">ความสำคัญ</span>'+esc((PRI[t.priority]||PRI.med).t)+'</div>'+
+    '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบประมาณ (บาท)</span>'+(t.budget?baht(t.budget):'—')+'</div>'+
+    '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div style="grid-column:span 2"><span class="lb">อ้างอิงแผนวิสาหกิจ</span>'+esc(t.planRef||'—')+'</div></div>'+
+    (t.desc?'<div><span class="muted">รายละเอียดงาน</span><div>'+nl(t.desc)+'</div></div>':'');
+  if(ph.length){
+    s+='<h3>เฟส / งานย่อย</h3><table><thead><tr><th class="n" style="width:5%">#</th><th>เฟส/งานย่อย</th><th class="n">น้ำหนัก</th><th class="n">งบประมาณ (บาท)</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th></tr></thead><tbody>'+
+      ph.map((p,i)=>{const pp=latestPct(t.id,p.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(p.name)+'</td><td class="n">'+p.weight+'%</td><td class="n">'+(p.budget?baht(p.budget):'—')+'</td><td>'+dueCell(p.due,pp>=100||t.status==='done')+'</td><td>'+pbar(pp)+'</td></tr>';}).join('')+'</tbody></table>';
+    ph.forEach((p,i)=>{s+='<h3>รายงานเฟส '+(i+1)+': '+esc(p.name)+'</h3>'+repTable(reps.filter(r=>r.phaseId===p.id).sort(byRec));});
+    const rest=reps.filter(r=>!r.phaseId||!known.has(r.phaseId)).sort(byRec);
+    if(rest.length)s+='<h3>รายงานที่ไม่ระบุเฟส</h3>'+repTable(rest);
+  }else s+='<h3>รายงานความก้าวหน้า</h3>'+repTable(reps.slice().sort(byRec));
+  return s+'</section>';
+}
+function printTaskReport(ids){
+  const list=ids.map(id=>S.tasks[id]&&Object.assign({id},S.tasks[id])).filter(Boolean);
+  if(!list.length){toast('ไม่มีงานให้ออกรายงาน');return;}
+  const title=list.length===1?'รายงานความก้าวหน้า: '+(list[0].title||''):'รายงานความก้าวหน้างาน';
+  openPrint(title,docHeader(list.length===1?'รายงานความก้าวหน้างาน':'รายงานความก้าวหน้างาน ('+list.length+' งาน)',list.length===1?(list[0].title||''):filterNote())+list.map(taskReportHtml).join('')+
+    (list.length===1?'<div class="sign"><div><p>ผู้รายงาน</p></div><div><p>ผู้ตรวจสอบ / ผู้บังคับบัญชา</p></div></div>':''));
+}
+function printExecSummary(){
+  const list=filtered().sort(sortTasks);
+  if(!list.length){toast('ไม่มีงานให้สรุป');return;}
+  const pcs=new Map(list.map(t=>[t.id,taskPct(t)]));
+  const done=list.filter(t=>t.status==='done');const open=list.filter(t=>t.status!=='done');
+  const late=open.filter(isLate);const rd=remindDays();
+  const soon=open.filter(t=>t.due&&!isLate(t)&&dayDiff(t.due)<=rd);
+  const avg=Math.round(list.reduce((s,t)=>s+pcs.get(t.id),0)/list.length);
+  const bud=list.reduce((s,t)=>s+(Number(t.budget)||0),0);
+  const wavg=bud?Math.round(list.reduce((s,t)=>s+(Number(t.budget)||0)*pcs.get(t.id),0)/bud):avg;
+  const budDone=done.reduce((s,t)=>s+(Number(t.budget)||0),0);
+  let s=docHeader('สรุปรายงานสำหรับผู้บริหาร','ข้อมูล ณ วันที่ '+fmtDate(today(),true)+' · '+filterNote());
+  s+='<div class="kpis"><div class="kpi"><b>'+list.length+'</b>งานทั้งหมด</div><div class="kpi"><b>'+done.length+'</b>เสร็จแล้ว ('+Math.round(done.length*100/list.length)+'%)</div>'+
+    '<div class="kpi"><b>'+open.length+'</b>อยู่ระหว่างดำเนินการ</div><div class="kpi'+(late.length?' alert':'')+'"><b>'+late.length+'</b>เกินกำหนดแล้วเสร็จ</div>'+
+    '<div class="kpi"><b>'+avg+'%</b>ความก้าวหน้าเฉลี่ย</div><div class="kpi"><b>'+wavg+'%</b>ความก้าวหน้าถ่วงตามงบประมาณ</div>'+
+    '<div class="kpi"><b>'+baht(bud)+'</b>งบประมาณรวม (บาท)</div><div class="kpi"><b>'+baht(budDone)+'</b>งบของงานที่เสร็จแล้ว (บาท)</div></div>';
+  s+='<h2>สถานะงานตามขั้นตอน</h2><table><thead><tr>'+STATUSES.map(x=>'<th class="n">'+esc(x.t)+'</th>').join('')+'</tr></thead><tbody><tr>'+STATUSES.map(x=>'<td class="n">'+list.filter(t=>(t.status||'todo')===x.k).length+'</td>').join('')+'</tr></tbody></table>';
+  const attn=late.concat(soon);
+  s+='<h2>เรื่องที่ต้องติดตาม</h2>'+(attn.length?'<table><thead><tr><th>งาน</th><th>ผู้รับผิดชอบ</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th></tr></thead><tbody>'+
+    attn.map(t=>'<tr><td>'+esc(t.title)+'</td><td>'+esc(memberName(t.assignee))+'</td><td>'+dueCell(t.due,false)+'</td><td>'+pbar(pcs.get(t.id))+'</td></tr>').join('')+'</tbody></table>':'<div class="muted">ไม่มีงานที่เกินกำหนดหรือใกล้ครบกำหนดภายใน '+rd+' วัน</div>');
+  s+='<h2>ภาพรวมงานทั้งหมด</h2><table><thead><tr><th class="n">#</th><th>งาน</th><th>ผู้รับผิดชอบ</th><th>กำหนดแล้วเสร็จ</th><th>สถานะ</th><th>ความก้าวหน้า</th><th class="n">งบประมาณ (บาท)</th><th>อ้างอิงแผนวิสาหกิจ</th></tr></thead><tbody>'+
+    list.map((t,i)=>'<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'</td><td>'+esc(memberName(t.assignee))+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+esc(STATUS_T[t.status||'todo'])+'</td><td>'+pbar(pcs.get(t.id))+'</td><td class="n">'+(t.budget?baht(t.budget):'—')+'</td><td>'+esc(t.planRef||'—')+'</td></tr>').join('')+
+    '<tr><th colspan="6" class="n">รวม</th><th class="n">'+baht(bud)+'</th><th></th></tr></tbody></table>';
+  const iss=[];list.forEach(t=>{const r=reportsFor(t.id).filter(r=>r.issues).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];if(r&&t.status!=='done'){const p=phasesOf(t).find(x=>x.id===r.phaseId);iss.push({t,r,p});}});
+  s+='<h2>ปัญหา/อุปสรรคล่าสุดของงานที่ยังไม่เสร็จ</h2>'+(iss.length?'<table><thead><tr><th>งาน / เฟส</th><th style="width:15%">วันที่รายงาน</th><th>ปัญหา/อุปสรรค</th></tr></thead><tbody>'+
+    iss.map(x=>'<tr><td>'+esc(x.t.title)+(x.p?'<br><span class="muted">'+esc(x.p.name)+'</span>':'')+'</td><td>'+fmtDate(x.r.date,true)+'</td><td class="issue">'+nl(x.r.issues)+'</td></tr>').join('')+'</tbody></table>':'<div class="muted">ไม่มีปัญหา/อุปสรรคที่รายงานไว้</div>');
+  const byM=new Map();list.forEach(t=>{const k=S.members[t.assignee]?t.assignee:'';if(!byM.has(k))byM.set(k,[]);byM.get(k).push(t);});
+  s+='<h2>สรุปตามผู้รับผิดชอบ</h2><table><thead><tr><th>ผู้รับผิดชอบ</th><th class="n">งานทั้งหมด</th><th class="n">เสร็จแล้ว</th><th class="n">เกินกำหนด</th><th>ความก้าวหน้าเฉลี่ย</th><th class="n">งบประมาณ (บาท)</th></tr></thead><tbody>'+
+    [...byM.entries()].map(([k,ts])=>{const a=Math.round(ts.reduce((s,t)=>s+pcs.get(t.id),0)/ts.length);return '<tr><td>'+esc(k?memberName(k):'ยังไม่มอบหมาย')+'</td><td class="n">'+ts.length+'</td><td class="n">'+ts.filter(t=>t.status==='done').length+'</td><td class="n">'+ts.filter(isLate).length+'</td><td>'+pbar(a)+'</td><td class="n">'+baht(ts.reduce((s,t)=>s+(Number(t.budget)||0),0))+'</td></tr>';}).join('')+'</tbody></table>';
+  openPrint('สรุปรายงานผู้บริหาร '+today(),s);
 }
 function memberCard(m,tasks){
   const counts=Object.fromEntries(STATUSES.map(s=>[s.k,tasks.filter(t=>(t.status||'todo')===s.k).length]));
@@ -864,7 +976,7 @@ function openTask(id,tab){
     h('button',{role:'tab','aria-selected':String(tab==='reports'),type:'button',text:'รายงานความก้าวหน้า ('+reps.length+')',onclick:()=>openTask(id,'reports')})):null;
   if(t&&tab==='reports'){
     const body=h('div',{class:'stackv'},tabs,
-      h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),
+      h('div',{class:'rep-tools'},h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),h('button',{class:'btn small',type:'button',text:'ออกรายงาน PDF',onclick:()=>printTaskReport([t.id])})),
       phasesOf(t).length?h('div',{class:'stamp',text:'ความก้าวหน้ารวมคิดจาก น้ำหนักเฟส × % ล่าสุดของแต่ละเฟส'}):null,
       phaseSections(t,{addBtn:true}),
       ro?null:reportForm(t));
