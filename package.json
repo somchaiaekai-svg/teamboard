@@ -6,7 +6,7 @@
     "reminders": "node scripts/send-reminders.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.45.4",
+    "@supabase/supabase-js": "2.117.2",
     "nodemailer": "6.9.15"
   }
 }
