@@ -159,6 +159,7 @@ td.small{font-size:.82rem;color:var(--muted);max-width:220px}
 td.pre{white-space:pre-wrap;font-size:.88rem;max-width:280px}
 td.issue{color:var(--danger)}
 .files{display:flex;flex-direction:column;gap:2px}
+.bad-text{color:var(--danger)!important;font-weight:600}
 .refs{border:1px solid var(--line);border-radius:10px;padding:8px 12px 12px;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.refs legend{padding:0 6px;font-size:.88rem;color:var(--muted)}
 .refblock{display:flex;flex-direction:column;gap:6px}.refblock label{font-weight:600;font-size:.9rem}.refrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .file{color:var(--accent);font-size:.85rem;text-decoration:none;overflow-wrap:anywhere}
@@ -989,7 +990,7 @@ function armDelete(btn,label,fn){
   btn.addEventListener('click',e=>{e.stopPropagation();if(!armed){armed=true;btn.classList.add('armed');btn.textContent='กดอีกครั้งเพื่อยืนยัน';setTimeout(()=>{armed=false;btn.classList.remove('armed');btn.textContent=label;},4000);}else fn();});
   return btn;
 }
-function phaseEditor(initial,taskId,ro){
+function phaseEditor(initial,taskId,ro,getCap){
   let rows=initial.map(p=>Object.assign({},p));
   const wrap=h('div',{class:'phases'});
   const draw=()=>{
@@ -1017,10 +1018,10 @@ function phaseEditor(initial,taskId,ro){
       rows.length>1?h('div',{class:'stamp',text:'เมื่อบันทึก ระบบจะเรียงเฟสตามวันที่คาดว่าจะแล้วเสร็จ'}):'');
     updTotal();
   };
-  const updTotal=()=>{const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');const bt=wrap.querySelector('#ph-budget');if(bt)bt.textContent='งบประมาณรวมทุกเฟส '+baht(budgetSum())+' บาท';};
+  const updTotal=()=>{const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');const bt=wrap.querySelector('#ph-budget');if(bt){const cap=getCap?getCap():0,sum=budgetSum(),over=cap&&sum>cap+0.009;bt.textContent='งบประมาณรวมทุกเฟส '+baht(sum)+' บาท'+(cap?(over?' · เกินงบโครงการ '+baht(sum-cap)+' บาท':Math.abs(cap-sum)<0.01?' · เท่ากับงบโครงการ ✓':' · ยังไม่จัดสรร '+baht(cap-sum)+' บาท จากงบโครงการ '+baht(cap)):'');bt.className='stamp'+(over?' bad-text':'');}};
   const budgetSum=()=>rows.reduce((s,p)=>s+(Number(p.budget)||0),0);
   draw();
-  return{el:wrap,get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,budget:Number(p.budget)||0,due:p.due||'',done:!!p.done,doneDate:p.done?(p.doneDate||today()):''})).sort(byDue),budgetSum,valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
+  return{el:wrap,refresh:()=>updTotal(),get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,budget:Number(p.budget)||0,due:p.due||'',done:!!p.done,doneDate:p.done?(p.doneDate||today()):''})).sort(byDue),budgetSum,valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
 }
 function reportForm(t){
   const ph=phasesOf(t);
@@ -1103,7 +1104,8 @@ function openTask(id,tab){
   const due=h('input',{id:'tk-due',type:'date',value:t?t.due||'':'',disabled:ro});
   const budget=h('input',{id:'tk-budget',type:'number',min:'0',step:'0.01',class:'num',value:t&&t.budget?String(t.budget):'',disabled:ro,placeholder:'0'});
   const refs=REF_KINDS.map(k=>refBlock(t,k,ro));
-  const phases=phaseEditor(t?phasesOf(t):[],t?t.id:null,ro);
+  const phases=phaseEditor(t?phasesOf(t):[],t?t.id:null,ro,()=>Number(budget.value)||0);
+  budget.addEventListener('input',()=>phases.refresh());
   const pctNow=t?taskPct(t):0;
   const info=h('div',{class:'stackv'},
     h('div',{class:'field'},h('label',{for:'tk-title',text:'ชื่องาน'}),title),
@@ -1120,7 +1122,7 @@ function openTask(id,tab){
     if(!phases.valid()){toast('น้ำหนักของเฟสต้องรวมได้ 100%');return;}
     const ph=phases.get();if(ph.some(p=>!p.name)){toast('ใส่ชื่อเฟสให้ครบทุกแถว');return;}
     let bud=Number(budget.value)||0;const pb=phases.budgetSum();
-    if(!bud&&pb)bud=pb;else if(pb&&Math.abs(pb-bud)>0.009)toast('หมายเหตุ: งบรวมของเฟส ('+baht(pb)+') ไม่เท่ากับงบประมาณของงาน ('+baht(bud)+')');
+    if(!bud&&pb)bud=pb;else if(pb>bud+0.009){budget.focus();toast('งบประมาณรวมของเฟส ('+baht(pb)+' บาท) เกินงบประมาณรวมโครงการ ('+baht(bud)+' บาท) กรุณาแก้ไขก่อนบันทึก');return;}
     let stv=st.value;
     if(t&&stv!=='done'&&allPhasesDone(t,ph)){stv='done';toast('ทุกเฟสแล้วเสร็จ ปิดงานให้แล้ว');}
     const now=Date.now();const data={title:v,desc:desc.value.trim(),assignee:as.value,status:stv,priority:pr.value,assignedDate:assigned.value,due:due.value,
