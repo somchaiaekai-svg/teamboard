@@ -181,6 +181,15 @@ input.cell{border:1px solid var(--line);background:var(--surface);border-radius:
 .rem-who{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.82rem;overflow-wrap:anywhere}
 .rl.mail{font-family:var(--f-mono);font-size:.75rem;overflow-wrap:anywhere}
 td.num,th,.who span{white-space:nowrap}
+.phase-sec{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--surface);min-width:0}
+.phase-hd,.task-rep-hd{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.phase-hd h4{margin:0;font-size:1rem}
+.phase-no{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:.8rem;flex:none}
+.phase-pct{flex:1 1 140px;max-width:240px;margin-left:auto}
+.docs{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px}
+.task-rep{background:var(--sunk);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.task-rep-hd h3{margin:0;font-size:1.05rem;cursor:pointer}
+.task-rep-hd h3:hover{color:var(--accent)}
 .who-box{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);overflow-wrap:anywhere}
 .copyfallback{width:100%;min-height:80px;font-size:.8rem}
 .stats{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
@@ -286,7 +295,8 @@ async function copyText(text,btn){
 // ---------- progress ----------
 function reportsFor(taskId){return Object.entries(S.reports).map(([id,v])=>Object.assign({id},v)).filter(r=>r.taskId===taskId).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));}
 function latestPct(taskId,phaseId){const r=reportsFor(taskId).find(r=>(r.phaseId||'')===(phaseId||''));return r?clampPct(r.percent):0;}
-function phasesOf(t){return Array.isArray(t.phases)?t.phases:[];}
+const byDue=(a,b)=>(a.due||'9999-99-99').localeCompare(b.due||'9999-99-99');
+function phasesOf(t){return (Array.isArray(t.phases)?t.phases.slice():[]).sort(byDue);}
 function taskPct(t){
   if(t.status==='done')return 100;
   const ph=phasesOf(t);
@@ -404,13 +414,13 @@ function renderGate(v){
 function sampleData(){
   const m=[['นภา','หัวหน้าโครงการ','napa@example.com'],['ธนกร','นักพัฒนา','thanakorn@example.com'],['ปิยะ','ออกแบบ UX/UI','piya@example.com'],['วรรณา','การตลาด','wanna@example.com']]
     .map((x,i)=>({id:'sm'+i,name:x[0],role:x[1],email:x[2],color:COLORS[i],sample:true,createdAt:Date.now()+i}));
-  const ph=(...a)=>a.map((x,i)=>({id:'p'+i,name:x[0],weight:x[1],due:addDays(x[2])}));
+  const ph=(...a)=>a.map((x,i)=>({id:'p'+i,name:x[0],weight:x[1],due:addDays(x[2]),budget:x[3]||0}));
   const t=[
     {title:'พัฒนาระบบชำระเงินออนไลน์',status:'doing',priority:'high',assignee:'sm1',assignedDate:addDays(-14),due:addDays(10),budget:250000,planRef:'แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 2: บริการดิจิทัล',
-      phases:ph(['วิเคราะห์ความต้องการ',20,-7],['พัฒนาระบบ',50,4],['ทดสอบและส่งมอบ',30,10])},
+      phases:ph(['วิเคราะห์ความต้องการ',20,-7,30000],['พัฒนาระบบ',50,4,170000],['ทดสอบและส่งมอบ',30,10,50000])},
     {title:'ออกแบบหน้าจอแดชบอร์ดผู้บริหาร',status:'review',priority:'high',assignee:'sm2',assignedDate:addDays(-10),due:addDays(1),budget:60000,planRef:'',phases:[]},
     {title:'วางแผนแคมเปญเปิดตัวบริการ',status:'doing',priority:'med',assignee:'sm3',assignedDate:addDays(-5),due:addDays(-1),budget:120000,planRef:'แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 4: การตลาด',
-      phases:ph(['สำรวจกลุ่มเป้าหมาย',40,-3],['จัดทำสื่อ',60,-1])},
+      phases:ph(['สำรวจกลุ่มเป้าหมาย',40,-3,40000],['จัดทำสื่อ',60,-1,80000])},
     {title:'สรุปงบประมาณไตรมาส 4',status:'todo',priority:'low',assignee:'sm0',assignedDate:addDays(-1),due:addDays(12),budget:0,planRef:'',phases:[]},
     {title:'ประชุมเริ่มโครงการกับลูกค้า',status:'done',priority:'med',assignee:'sm0',assignedDate:addDays(-20),due:addDays(-6),budget:5000,planRef:'',phases:[]},
   ].map((x,i)=>Object.assign({id:'st'+i,desc:'',sample:true,createdAt:Date.now()+i,updatedAt:Date.now(),completedAt:x.status==='done'?Date.now()-6*864e5:null},x));
@@ -593,9 +603,9 @@ function fileLinks(r){
   if(r.link&&/^https?:\/\//i.test(r.link))out.push(h('a',{href:r.link,target:'_blank',rel:'noopener noreferrer',class:'file',text:'🔗 ลิงก์เอกสาร'}));
   return out.length?h('div',{class:'files'},out):'—';
 }
-function reportTable(reports,showTask){
+function reportTable(reports,showTask,hidePhase){
   if(!reports.length)return h('div',{class:'empty-col',text:'ยังไม่มีรายงานความก้าวหน้า'});
-  const heads=['วันที่รายงาน',...(showTask?['งาน','ผู้รับผิดชอบ']:[]),'เฟส/งานย่อย','ความก้าวหน้า','รายละเอียดผลการดำเนินงาน','ปัญหา/อุปสรรค','เอกสารแนบ',''];
+  const heads=['วันที่รายงาน',...(showTask?['งาน','ผู้รับผิดชอบ']:[]),...(hidePhase?[]:['เฟส/งานย่อย']),'ความก้าวหน้า','รายละเอียดผลการดำเนินงาน','ปัญหา/อุปสรรค','เอกสารแนบ',''];
   return h('div',{class:'tablewrap'},h('table',{class:'wide'},
     h('thead',null,h('tr',null,heads.map(x=>h('th',{text:x})))),
     h('tbody',null,reports.map(r=>{
@@ -605,7 +615,7 @@ function reportTable(reports,showTask){
         h('td',{class:'num',text:fmtDate(r.date,true)}),
         showTask?h('td',{class:'title',onclick:()=>openTask(r.taskId),text:t.title||'(งานถูกลบ)'}):null,
         showTask?h('td',null,h('div',{class:'who'},avatar(m),h('span',{text:m?m.name:'—'}))):null,
-        h('td',{text:ph?ph.name+' ('+ph.weight+'%)':(r.phaseId?'(เฟสถูกลบ)':'ทั้งงาน')}),
+        hidePhase?null:h('td',{text:ph?ph.name+' ('+ph.weight+'%)':(r.phaseId?'(เฟสถูกลบ)':'ทั้งงาน')}),
         h('td',{style:'min-width:110px'},h('div',{class:'pct'},bar(clampPct(r.percent)),h('span',{class:'num',text:clampPct(r.percent)+'%'}))),
         h('td',{class:'pre',text:r.detail||'—'}),
         h('td',{class:'pre'+(r.issues?' issue':''),text:r.issues||'—'}),
@@ -613,11 +623,47 @@ function reportTable(reports,showTask){
         h('td',null,del));
     }))));
 }
+function phaseSections(t,opts){
+  opts=opts||{};
+  const reps=reportsFor(t.id);const ph=phasesOf(t);
+  const groups=ph.map(p=>({p,reps:reps.filter(r=>r.phaseId===p.id)}));
+  const known=new Set(ph.map(p=>p.id));
+  const rest=reps.filter(r=>!r.phaseId||!known.has(r.phaseId));
+  if(!ph.length||rest.length)groups.push({p:null,reps:rest});
+  return h('div',{class:'stackv'},groups.map(({p,reps},i)=>{
+    const pc=p?latestPct(t.id,p.id):(ph.length?latestPct(t.id,''):taskPct(t));
+    const di=p?dueInfo(p.due,pc>=100||t.status==='done'):null;
+    const docs=[];reps.forEach(r=>{(r.files||[]).forEach(f=>docs.push({f,date:r.date}));if(r.link&&/^https?:\/\//i.test(r.link))docs.push({link:r.link,date:r.date});});
+    return h('section',{class:'phase-sec'},
+      h('div',{class:'phase-hd'},
+        h('span',{class:'phase-no',text:p?String(i+1):'•'}),
+        h('h4',{text:p?p.name:(ph.length?'รายงานที่ไม่ระบุเฟส':'ทั้งงาน')}),
+        p?h('span',{class:'chip',text:'น้ำหนัก '+p.weight+'%'}):null,
+        p&&p.budget?h('span',{class:'chip',text:'งบ '+baht(p.budget)+' บาท'}):null,
+        p&&p.due?h('span',{class:'chip '+(di?di.cls:''),title:'วันที่คาดว่าจะแล้วเสร็จ',text:(di&&di.cls?di.text+' · ':'')+'เสร็จ '+fmtDate(p.due,true)}):null,
+        h('div',{class:'pct phase-pct'},bar(pc),h('span',{class:'num',text:pc+'%'})),
+        opts.addBtn&&S.canWrite?h('button',{class:'btn small',type:'button',text:'+ รายงานเฟสนี้',onclick:()=>{const sel=document.getElementById('rp-phase');if(sel){sel.value=p?p.id:'';sel.dispatchEvent(new Event('change'));}const f=document.querySelector('.repform');if(f){f.scrollIntoView({behavior:'smooth',block:'start'});const d=document.getElementById('rp-detail');if(d)setTimeout(()=>d.focus(),300);}}}):null),
+      h('div',{class:'docs'},h('span',{class:'stamp',text:(p?'เอกสารของเฟสนี้':'เอกสาร')+' ('+docs.length+'):'}),
+        docs.length?docs.map(d=>d.f?h('a',{href:'#',class:'file',text:'📎 '+(d.f.name||'ไฟล์แนบ')+' · '+fmtDate(d.date),onclick:e=>{e.preventDefault();if(sb&&d.f.path)openFile(d.f);}}):h('a',{href:d.link,target:'_blank',rel:'noopener noreferrer',class:'file',text:'🔗 ลิงก์เอกสาร · '+fmtDate(d.date)})):h('span',{class:'stamp',text:'ยังไม่มี'})),
+      reps.length?reportTable(reps,false,true):h('div',{class:'stamp',text:p?'ยังไม่มีรายงานของเฟสนี้':'ยังไม่มีรายงาน'}));
+  }));
+}
 function renderReportsView(){
-  const ids=new Set(filtered().map(t=>t.id));
-  const reps=Object.entries(S.reports).map(([id,v])=>Object.assign({id},v)).filter(r=>ids.has(r.taskId)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+  const list=filtered().sort(sortTasks);
+  const ids=new Set(list.map(t=>t.id));
+  const reps=Object.values(S.reports).filter(r=>ids.has(r.taskId));
   const issues=reps.filter(r=>r.issues).length;
-  return h('div',{class:'stackv'},h('div',{class:'stamp',text:'รายงานทั้งหมด '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),reportTable(reps,true));
+  if(!list.length)return h('div',{class:'empty-col',text:'ไม่พบงานตามตัวกรองนี้'});
+  return h('div',{class:'stackv'},h('div',{class:'stamp',text:'รายงานทั้งหมด '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),
+    list.map(t=>{const m=S.members[t.assignee];const pc=taskPct(t);const di=dueInfo(t.due,t.status==='done');
+      return h('article',{class:'task-rep'},
+        h('div',{class:'task-rep-hd'},
+          h('h3',{class:'title',onclick:()=>openTask(t.id,'reports'),text:t.title||'(ไม่มีชื่องาน)'}),
+          h('div',{class:'who'},avatar(m),h('span',{text:m?m.name:'ยังไม่มอบหมาย'})),
+          di?h('span',{class:'chip '+di.cls,text:di.text}):null,
+          t.budget?h('span',{class:'chip',text:'งบ '+baht(t.budget)+' บาท'}):null,
+          h('div',{class:'pct phase-pct'},bar(pc),h('span',{class:'num',text:'รวม '+pc+'%'}))),
+        phaseSections(t));}));
 }
 function memberCard(m,tasks){
   const counts=Object.fromEntries(STATUSES.map(s=>[s.k,tasks.filter(t=>(t.status||'todo')===s.k).length]));
@@ -696,25 +742,29 @@ function phaseEditor(initial,taskId,ro){
     const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);
     wrap.replaceChildren(
       rows.length?h('div',{class:'tablewrap'},h('table',null,
-        h('thead',null,h('tr',null,['เฟส / งานย่อย','น้ำหนัก (%)','วันที่คาดว่าจะแล้วเสร็จ','ความก้าวหน้า',''].map(x=>h('th',{text:x})))),
+        h('thead',null,h('tr',null,['เฟส / งานย่อย','น้ำหนัก (%)','งบประมาณ (บาท)','วันที่คาดว่าจะแล้วเสร็จ','ความก้าวหน้า',''].map(x=>h('th',{text:x})))),
         h('tbody',null,rows.map((p,i)=>{
           const pc=taskId?latestPct(taskId,p.id):0;
           return h('tr',null,
             h('td',null,h('input',{class:'cell',value:p.name||'',placeholder:'ชื่อเฟส',disabled:ro,'aria-label':'ชื่อเฟส',oninput:e=>{p.name=e.target.value}})),
             h('td',null,h('input',{class:'cell num',type:'number',min:'0',max:'100',step:'1',value:String(p.weight??''),disabled:ro,'aria-label':'น้ำหนัก',style:'width:80px',oninput:e=>{p.weight=Number(e.target.value)||0;updTotal();}})),
+            h('td',null,h('input',{class:'cell num',type:'number',min:'0',step:'0.01',value:p.budget?String(p.budget):'',placeholder:'0',disabled:ro,'aria-label':'งบประมาณของเฟส',style:'width:120px',oninput:e=>{p.budget=Number(e.target.value)||0;updTotal();}})),
             h('td',null,h('input',{class:'cell',type:'date',value:p.due||'',disabled:ro,'aria-label':'วันที่คาดว่าจะแล้วเสร็จของเฟส',oninput:e=>{p.due=e.target.value}})),
             h('td',{style:'min-width:100px'},h('div',{class:'pct'},bar(pc),h('span',{class:'num',text:pc+'%'}))),
             h('td',null,ro?null:h('button',{class:'btn ghost small',type:'button',text:'ลบ',onclick:()=>{rows.splice(i,1);draw();}})));
         })))):h('div',{class:'stamp',text:'ยังไม่ได้แบ่งเฟส งานนี้จะคิดความก้าวหน้าจากรายงานระดับทั้งงาน'}),
       h('div',{class:'row',style:'align-items:center'},
-        ro?null:h('button',{class:'btn',type:'button',text:'+ เพิ่มเฟส/งานย่อย',onclick:()=>{rows.push({id:uid('p'),name:'',weight:0,due:''});draw();const ins=wrap.querySelectorAll('input.cell');if(ins.length)ins[ins.length-3].focus();}}),
+        ro?null:h('button',{class:'btn',type:'button',text:'+ เพิ่มเฟส/งานย่อย',onclick:()=>{rows.push({id:uid('p'),name:'',weight:0,budget:0,due:''});draw();const ins=wrap.querySelectorAll('input.cell');if(ins.length)ins[ins.length-4].focus();}}),
         rows.length&&!ro?h('button',{class:'btn',type:'button',text:'แบ่งน้ำหนักเท่ากัน',onclick:()=>{const n=rows.length;const b=Math.floor(100/n);rows.forEach((p,i)=>p.weight=b+(i<100-b*n?1:0));draw();}}):null,
-        rows.length?h('span',{class:'total',id:'ph-total'}):null));
+        rows.length?h('span',{class:'total',id:'ph-total'}):null,
+        rows.length?h('span',{class:'stamp',id:'ph-budget'}):null),
+      rows.length>1?h('div',{class:'stamp',text:'เมื่อบันทึก ระบบจะเรียงเฟสตามวันที่คาดว่าจะแล้วเสร็จ'}):null);
     updTotal();
   };
-  const updTotal=()=>{const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');};
+  const updTotal=()=>{const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');const bt=wrap.querySelector('#ph-budget');if(bt)bt.textContent='งบประมาณรวมทุกเฟส '+baht(budgetSum())+' บาท';};
+  const budgetSum=()=>rows.reduce((s,p)=>s+(Number(p.budget)||0),0);
   draw();
-  return{el:wrap,get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,due:p.due||''})),valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
+  return{el:wrap,get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,budget:Number(p.budget)||0,due:p.due||''})).sort(byDue),budgetSum,valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
 }
 function reportForm(t){
   const ph=phasesOf(t);
@@ -781,7 +831,7 @@ function openTask(id,tab){
   const info=h('div',{class:'stackv'},
     h('div',{class:'field'},h('label',{for:'tk-title',text:'ชื่องาน'}),title),
     h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-as',text:'ผู้รับผิดชอบ'}),as),h('div',{class:'field'},h('label',{for:'tk-st',text:'สถานะ'}),st),h('div',{class:'field'},h('label',{for:'tk-pr',text:'ความสำคัญ'}),pr)),
-    h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-assigned',text:'วันที่มอบหมาย'}),assigned),h('div',{class:'field'},h('label',{for:'tk-due',text:'วันที่คาดว่าจะแล้วเสร็จ'}),due),h('div',{class:'field'},h('label',{for:'tk-budget',text:'งบประมาณ (บาท)'}),budget)),
+    h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-assigned',text:'วันที่มอบหมาย'}),assigned),h('div',{class:'field'},h('label',{for:'tk-due',text:'วันที่คาดว่าจะแล้วเสร็จ'}),due),h('div',{class:'field'},h('label',{for:'tk-budget',text:'งบประมาณรวม (บาท) · เว้นว่างเพื่อใช้ผลรวมงบเฟส'}),budget)),
     h('div',{class:'field'},h('label',{for:'tk-plan',text:'อ้างอิงแผนวิสาหกิจ (ถ้ามี)'}),plan),
     h('div',{class:'field'},h('label',{for:'tk-desc',text:'รายละเอียดงาน'}),desc),
     h('div',{class:'field'},h('label',{text:'เฟส / งานย่อย (น้ำหนักรวมต้องเท่ากับ 100%)'}),phases.el),
@@ -792,8 +842,10 @@ function openTask(id,tab){
     if(assigned.value&&due.value&&due.value<assigned.value){due.focus();toast('วันที่คาดว่าจะแล้วเสร็จต้องไม่ก่อนวันที่มอบหมาย');return;}
     if(!phases.valid()){toast('น้ำหนักของเฟสต้องรวมได้ 100%');return;}
     const ph=phases.get();if(ph.some(p=>!p.name)){toast('ใส่ชื่อเฟสให้ครบทุกแถว');return;}
+    let bud=Number(budget.value)||0;const pb=phases.budgetSum();
+    if(!bud&&pb)bud=pb;else if(pb&&Math.abs(pb-bud)>0.009)toast('หมายเหตุ: งบรวมของเฟส ('+baht(pb)+') ไม่เท่ากับงบประมาณของงาน ('+baht(bud)+')');
     const now=Date.now();const data={title:v,desc:desc.value.trim(),assignee:as.value,status:st.value,priority:pr.value,assignedDate:assigned.value,due:due.value,
-      budget:Number(budget.value)||0,planRef:plan.value.trim(),phases:ph,updatedAt:now,completedAt:st.value==='done'?((t&&t.completedAt)||now):null};
+      budget:bud,planRef:plan.value.trim(),phases:ph,updatedAt:now,completedAt:st.value==='done'?((t&&t.completedAt)||now):null};
     if(!t)data.createdAt=now;
     const nid=id||uid('t');
     const ok=await write('tasks',nid,data);
@@ -807,7 +859,7 @@ function openTask(id,tab){
     const body=h('div',{class:'stackv'},tabs,
       h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),
       phasesOf(t).length?h('div',{class:'stamp',text:'ความก้าวหน้ารวมคิดจาก น้ำหนักเฟส × % ล่าสุดของแต่ละเฟส'}):null,
-      reportTable(reps,false),
+      phaseSections(t,{addBtn:true}),
       ro?null:reportForm(t));
     modal(t.title||'รายละเอียดงาน',body,null,true);
     return;
