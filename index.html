@@ -856,7 +856,7 @@ function taskReportHtml(t,links){
   let s='<section class="task"><h2>'+esc(t.title||'(ไม่มีชื่องาน)')+'</h2>'+
     '<div class="grid"><div><span class="lb">ผู้รับผิดชอบ</span>'+esc(memberName(t.assignee))+'</div><div><span class="lb">สถานะ</span>'+esc(STATUS_T[t.status||'todo'])+'</div><div><span class="lb">ความสำคัญ</span>'+esc((PRI[t.priority]||PRI.med).t)+'</div>'+
     (()=>{const c=currentPhase(t);return c&&!c.all?'<div style="grid-column:span 3;background:#f3f3ef;padding:4px 8px;border-radius:4px"><span class="lb">เฟสปัจจุบัน</span>เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+' · ความก้าวหน้า '+c.pct+'% · <b>กำหนดแล้วเสร็จเฟสปัจจุบัน '+(c.p.due?dueCell(c.p.due,false).replace('<br>',' '):'—')+'</b> · <b>วันที่คาดว่าจะแล้วเสร็จโครงการ '+(t.due?dueCell(t.due,t.status==='done').replace('<br>',' '):'—')+'</b></div>':'';})()+
-    '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จโครงการ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบรวม / จ่ายแล้วทุกเฟส / คงเหลือ (บาท)</span>'+(projBudget(t)?baht(projBudget(t)):'—')+' / '+baht(spentOf(t.id))+' / '+(projBudget(t)?baht(projBudget(t)-spentOf(t.id)):'—')+'</div>'+
+    '<div><span class="lb">วันที่มอบหมาย / ระยะเวลา / งวดงาน</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+(t.durationDays?' · '+t.durationDays+' วัน':'')+(t.installments?' · '+t.installments+' งวด':'')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จโครงการ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบรวม / จ่ายแล้วทุกเฟส / คงเหลือ (บาท)</span>'+(projBudget(t)?baht(projBudget(t)):'—')+' / '+baht(spentOf(t.id))+' / '+(projBudget(t)?baht(projBudget(t)-spentOf(t.id)):'—')+'</div>'+
     '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div><span class="lb">ผลการดำเนินงานตามแผน</span>'+planCell(t)+'</div><div><span class="lb">ที่มางบประมาณ</span>'+esc(t.budgetSource||'—')+'</div></div>'+refsHtml(t,links)+
     (t.desc?'<div><span class="muted">รายละเอียดงาน</span><div>'+nl(t.desc)+'</div></div>':'');
   if(ph.length){
@@ -897,8 +897,8 @@ function printExecSummary(){
   const phaseCell=t=>{const c=currentPhase(t);if(!c)return '<span class="muted">ไม่ได้แบ่งเฟส</span>';if(c.all)return '<span class="ok">ครบทุกเฟส ('+c.n+'/'+c.n+')</span>';
     return 'เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+'<br><span class="muted">ความก้าวหน้า '+c.pct+'%</span>';};
   const phaseDueCell=t=>{const c=currentPhase(t);if(!c||c.all)return '—';return c.p.due?dueCell(c.p.due,false):'—';};
-  s+='<h2>ภาพรวมทุกโครงการ</h2><table><thead><tr><th class="n">#</th><th>โครงการ / ผู้รับผิดชอบ</th><th>วันที่เริ่มต้น</th><th>เฟสปัจจุบัน</th><th>กำหนดแล้วเสร็จ<br>เฟสปัจจุบัน</th><th>วันที่คาดว่าจะแล้วเสร็จ<br>โครงการ</th><th>ความก้าวหน้า</th><th>ผลตามแผน</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่ายแล้ว (บาท)</th><th class="n">คงเหลือ (บาท)</th></tr></thead><tbody>'+
-    list.map((t,i)=>{const b=projBudget(t),x=sp.get(t.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'<br><span class="muted">'+esc(memberName(t.assignee))+(t.planRef?' · '+esc(t.planRef):'')+'</span></td><td>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</td><td>'+phaseCell(t)+'</td><td>'+phaseDueCell(t)+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+pbar(pcs.get(t.id))+'</td><td>'+planCell(t)+'</td><td class="n">'+(b?baht(b):'—')+'</td><td class="n">'+baht(x)+(b?'<br><span class="muted">'+Math.round(x*100/b)+'%</span>':'')+'</td><td class="n'+(b&&x>b?' off':'')+'">'+(b?baht(b-x):'—')+'</td></tr>';}).join('')+
+  s+='<h2>ภาพรวมทุกโครงการ</h2><table><thead><tr><th class="n">#</th><th>โครงการ / ผู้รับผิดชอบ</th><th>วันที่เริ่มต้น<br>ระยะเวลา/งวด</th><th>เฟสปัจจุบัน</th><th>กำหนดแล้วเสร็จ<br>เฟสปัจจุบัน</th><th>วันที่คาดว่าจะแล้วเสร็จ<br>โครงการ</th><th>ความก้าวหน้า</th><th>ผลตามแผน</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่ายแล้ว (บาท)</th><th class="n">คงเหลือ (บาท)</th></tr></thead><tbody>'+
+    list.map((t,i)=>{const b=projBudget(t),x=sp.get(t.id);return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(t.title)+'<br><span class="muted">'+esc(memberName(t.assignee))+(t.planRef?' · '+esc(t.planRef):'')+'</span></td><td>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+(t.durationDays||t.installments?'<br><span class="muted">'+[t.durationDays?t.durationDays+' วัน':'',t.installments?t.installments+' งวด':''].filter(Boolean).join(' · ')+'</span>':'')+'</td><td>'+phaseCell(t)+'</td><td>'+phaseDueCell(t)+'</td><td>'+dueCell(t.due,t.status==='done')+'</td><td>'+pbar(pcs.get(t.id))+'</td><td>'+planCell(t)+'</td><td class="n">'+(b?baht(b):'—')+'</td><td class="n">'+baht(x)+(b?'<br><span class="muted">'+Math.round(x*100/b)+'%</span>':'')+'</td><td class="n'+(b&&x>b?' off':'')+'">'+(b?baht(b-x):'—')+'</td></tr>';}).join('')+
     '<tr><th colspan="8" class="n">รวม</th><th class="n">'+baht(bud)+'</th><th class="n">'+baht(spent)+'</th><th class="n">'+baht(bud-spent)+'</th></tr></tbody></table>';
   s+='<h2>สถานะงานตามขั้นตอน</h2><table><thead><tr>'+STATUSES.map(x=>'<th class="n">'+esc(x.t)+'</th>').join('')+'</tr></thead><tbody><tr>'+STATUSES.map(x=>'<td class="n">'+list.filter(t=>(t.status||'todo')===x.k).length+'</td>').join('')+'</tr></tbody></table>';
   const attn=late.concat(soon);
@@ -1030,7 +1030,7 @@ function phaseEditor(initial,taskId,ro,getCap){
       wrap.querySelector('#ph-tnote').textContent=(w===100?'':'น้ำหนักต้องรวมเท่ากับ 100% ')+(cap?(over?'งบเกินงบโครงการ '+baht(b-cap)+' บาท':'งบโครงการ '+baht(cap)+' บาท'):'');}const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');const bt=wrap.querySelector('#ph-budget');if(bt){const cap=getCap?getCap():0,sum=budgetSum(),over=cap&&sum>cap+0.009;bt.textContent='งบประมาณรวมทุกเฟส '+baht(sum)+' บาท'+(cap?(over?' · เกินงบโครงการ '+baht(sum-cap)+' บาท':Math.abs(cap-sum)<0.01?' · เท่ากับงบโครงการ ✓':' · ยังไม่จัดสรร '+baht(cap-sum)+' บาท จากงบโครงการ '+baht(cap)):'');bt.className='stamp'+(over?' bad-text':'');}};
   const budgetSum=()=>rows.reduce((s,p)=>s+(Number(p.budget)||0),0);
   draw();
-  return{el:wrap,refresh:()=>updTotal(),get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,budget:Number(p.budget)||0,due:p.due||'',done:!!p.done,doneDate:p.done?(p.doneDate||today()):''})).sort(byDue),budgetSum,valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
+  return{el:wrap,refresh:()=>updTotal(),count:()=>rows.length,setRows:list=>{rows=list;draw();},get:()=>rows.map(p=>({id:p.id,name:(p.name||'').trim(),weight:Number(p.weight)||0,budget:Number(p.budget)||0,due:p.due||'',done:!!p.done,doneDate:p.done?(p.doneDate||today()):''})).sort(byDue),budgetSum,valid:()=>!rows.length||rows.reduce((s,p)=>s+(Number(p.weight)||0),0)===100};
 }
 function reportForm(t){
   const ph=phasesOf(t);
@@ -1110,16 +1110,35 @@ function openTask(id,tab){
   const st=h('select',{id:'tk-st',disabled:ro},STATUSES.map(s=>h('option',{value:s.k,text:s.t})));st.value=t?t.status||'todo':'todo';
   const pr=h('select',{id:'tk-pr',disabled:ro},Object.entries(PRI).map(([k,v])=>h('option',{value:k,text:v.t})));pr.value=t?t.priority||'med':'med';
   const assigned=h('input',{id:'tk-assigned',type:'date',value:t?t.assignedDate||'':today(),disabled:ro});
+  const dur=h('input',{id:'tk-dur',type:'number',min:'0',step:'1',class:'num',value:t&&t.durationDays?String(t.durationDays):'',disabled:ro,placeholder:'เช่น 120'});
+  const inst=h('input',{id:'tk-inst',type:'number',min:'0',step:'1',class:'num',value:t&&t.installments?String(t.installments):'',disabled:ro,placeholder:'เช่น 4'});
   const due=h('input',{id:'tk-due',type:'date',value:t?t.due||'':'',disabled:ro});
   const budget=h('input',{id:'tk-budget',type:'number',min:'0',step:'0.01',class:'num',value:t&&t.budget?String(t.budget):'',disabled:ro,placeholder:'0'});
   const refs=REF_KINDS.map(k=>refBlock(t,k,ro));
   const phases=phaseEditor(t?phasesOf(t):[],t?t.id:null,ro,()=>Number(budget.value)||0);
   budget.addEventListener('input',()=>phases.refresh());
+  const addD=(iso,n)=>{const [y,m,d]=iso.split('-').map(Number);return isoDay(new Date(y,m-1,d+n));};
+  dur.addEventListener('input',()=>{const n=parseInt(dur.value,10);if(assigned.value&&n>0)due.value=addD(assigned.value,n);});
+  const syncDur=()=>{if(assigned.value&&due.value&&due.value>=assigned.value)dur.value=String(daysBetween(due.value,assigned.value));};
+  due.addEventListener('change',syncDur);assigned.addEventListener('change',()=>{const n=parseInt(dur.value,10);if(n>0)due.value=addD(assigned.value,n);else syncDur();});
+  const makeInstallments=()=>{
+    const n=parseInt(inst.value,10);if(!(n>0&&n<=60)){inst.focus();toast('ใส่จำนวนงวด 1–60 ก่อน');return;}
+    if(phases.count()&&!confirm('แทนที่เฟสเดิม '+phases.count()+' รายการด้วย '+n+' งวด?'))return;
+    const total=parseInt(dur.value,10)||(assigned.value&&due.value?daysBetween(due.value,assigned.value):0);
+    const bud=Number(budget.value)||0;const w=Math.floor(100/n),bb=Math.floor(bud/n);
+    phases.setRows(Array.from({length:n},(_,i)=>({id:uid('p'),name:'งวดที่ '+(i+1),weight:w+(i<100-w*n?1:0),budget:bud?(i===n-1?bud-bb*(n-1):bb):0,
+      due:assigned.value&&total?addD(assigned.value,Math.round(total*(i+1)/n)):''})));
+    toast('สร้าง '+n+' งวดแล้ว ปรับชื่อ น้ำหนัก งบ และวันกำหนดของแต่ละงวดได้');
+  };
   const pctNow=t?taskPct(t):0;
   const info=h('div',{class:'stackv'},
     h('div',{class:'field'},h('label',{for:'tk-title',text:'ชื่องาน'}),title),
     h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-as',text:'ผู้รับผิดชอบ'}),as),h('div',{class:'field'},h('label',{for:'tk-st',text:'สถานะ'}),st),h('div',{class:'field'},h('label',{for:'tk-pr',text:'ความสำคัญ'}),pr)),
     h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-assigned',text:'วันที่มอบหมาย'}),assigned),h('div',{class:'field'},h('label',{for:'tk-due',text:'วันที่คาดว่าจะแล้วเสร็จ'}),due),h('div',{class:'field'},h('label',{for:'tk-budget',text:'งบประมาณรวม (บาท) · เว้นว่างเพื่อใช้ผลรวมงบเฟส'}),budget)),
+    h('div',{class:'row'},
+      h('div',{class:'field'},h('label',{for:'tk-dur',text:'ระยะเวลาดำเนินการ (วัน) · นับถัดจากวันที่มอบหมาย'}),dur),
+      h('div',{class:'field'},h('label',{for:'tk-inst',text:'จำนวนงวดงาน (งวด)'}),h('div',{class:'row',style:'align-items:center;flex-wrap:nowrap'},inst,
+        ro?null:h('button',{class:'btn small',type:'button',text:'สร้างเฟสตามงวด',title:'สร้างเฟส “งวดที่ 1..N” แบ่งน้ำหนัก งบ และวันกำหนดเท่า ๆ กัน',onclick:()=>makeInstallments()})))),
     h('fieldset',{class:'refs'},h('legend',{text:'ข้อมูลอ้างอิงและเอกสารแนบ'}),refs.map(r=>r.el)),
     h('div',{class:'field'},h('label',{for:'tk-desc',text:'รายละเอียดงาน'}),desc),
     h('div',{class:'field'},h('label',{text:'เฟส / งานย่อย (น้ำหนักรวมต้องเท่ากับ 100%)'}),phases.el),
@@ -1135,7 +1154,7 @@ function openTask(id,tab){
     let stv=st.value;
     if(t&&stv!=='done'&&allPhasesDone(t,ph)){stv='done';toast('ทุกเฟสแล้วเสร็จ ปิดงานให้แล้ว');}
     const now=Date.now();const data={title:v,desc:desc.value.trim(),assignee:as.value,status:stv,priority:pr.value,assignedDate:assigned.value,due:due.value,
-      budget:bud,phases:ph,updatedAt:now,completedAt:stv==='done'?((t&&t.completedAt)||now):null};
+      budget:bud,durationDays:parseInt(dur.value,10)||0,installments:parseInt(inst.value,10)||0,phases:ph,updatedAt:now,completedAt:stv==='done'?((t&&t.completedAt)||now):null};
     if(!t)data.createdAt=now;
     const nid=id||uid('t');
     const refFiles=Object.assign({},(t&&t.refFiles)||{});const gone=[];
