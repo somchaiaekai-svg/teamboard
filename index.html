@@ -159,6 +159,8 @@ td.small{font-size:.82rem;color:var(--muted);max-width:220px}
 td.pre{white-space:pre-wrap;font-size:.88rem;max-width:280px}
 td.issue{color:var(--danger)}
 .files{display:flex;flex-direction:column;gap:2px}
+.refs{border:1px solid var(--line);border-radius:10px;padding:8px 12px 12px;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.refs legend{padding:0 6px;font-size:.88rem;color:var(--muted)}
+.refblock{display:flex;flex-direction:column;gap:6px}.refblock label{font-weight:600;font-size:.9rem}.refrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .file{color:var(--accent);font-size:.85rem;text-decoration:none;overflow-wrap:anywhere}
 .file:hover{text-decoration:underline}
 .btn.small{padding:3px 8px;font-size:.82rem}
@@ -829,6 +831,11 @@ async function signFiles(reports){
   return out;
 }
 function docHeader(title,sub){return '<div class="doc-hd"><div><h1>'+esc(title)+'</h1><div class="muted">'+esc(sub)+'</div></div><div class="muted" style="text-align:right">บอร์ดติดตามงานทีม<br>พิมพ์เมื่อ '+esc(nowStamp())+'</div></div>';}
+function refsHtml(t,links){
+  const rows=REF_KINDS.map(k=>{const fs=refFilesOf(t,k.k);if(!t[k.field]&&!fs.length)return '';
+    return '<tr><th style="width:22%">'+esc(k.t)+'</th><td>'+(esc(t[k.field]||'')||'—')+(fs.length?'<br>'+fs.map(f=>links[f.path]?'<a href="'+esc(links[f.path])+'">📎 '+esc(f.name||'ไฟล์แนบ')+'</a>':'📎 '+esc(f.name||'ไฟล์แนบ')).join(' · '):'')+'</td></tr>';}).join('');
+  return rows?'<h3>ข้อมูลอ้างอิงและเอกสารแนบ</h3><table><tbody>'+rows+'</tbody></table>':'';
+}
 function taskReportHtml(t,links){
   links=links||{};
   const pc=taskPct(t);const ph=phasesOf(t);const reps=reportsFor(t.id);
@@ -841,7 +848,7 @@ function taskReportHtml(t,links){
     '<div class="grid"><div><span class="lb">ผู้รับผิดชอบ</span>'+esc(memberName(t.assignee))+'</div><div><span class="lb">สถานะ</span>'+esc(STATUS_T[t.status||'todo'])+'</div><div><span class="lb">ความสำคัญ</span>'+esc((PRI[t.priority]||PRI.med).t)+'</div>'+
     (()=>{const c=currentPhase(t);return c&&!c.all?'<div style="grid-column:span 3;background:#f3f3ef;padding:4px 8px;border-radius:4px"><span class="lb">เฟสปัจจุบัน</span>เฟส '+(c.i+1)+'/'+c.n+': '+esc(c.p.name)+' · ความก้าวหน้า '+c.pct+'% · <b>กำหนดแล้วเสร็จเฟสปัจจุบัน '+(c.p.due?dueCell(c.p.due,false).replace('<br>',' '):'—')+'</b> · <b>วันที่คาดว่าจะแล้วเสร็จโครงการ '+(t.due?dueCell(t.due,t.status==='done').replace('<br>',' '):'—')+'</b></div>':'';})()+
     '<div><span class="lb">วันที่มอบหมาย</span>'+(t.assignedDate?fmtDate(t.assignedDate,true):'—')+'</div><div><span class="lb">วันที่คาดว่าจะแล้วเสร็จโครงการ</span>'+dueCell(t.due,t.status==='done')+'</div><div><span class="lb">งบรวม / จ่ายแล้วทุกเฟส / คงเหลือ (บาท)</span>'+(projBudget(t)?baht(projBudget(t)):'—')+' / '+baht(spentOf(t.id))+' / '+(projBudget(t)?baht(projBudget(t)-spentOf(t.id)):'—')+'</div>'+
-    '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div><span class="lb">ผลการดำเนินงานตามแผน</span>'+planCell(t)+'</div><div><span class="lb">อ้างอิงแผนวิสาหกิจ</span>'+esc(t.planRef||'—')+'</div></div>'+
+    '<div><span class="lb">ความก้าวหน้ารวม</span>'+pbar(pc)+'</div><div><span class="lb">ผลการดำเนินงานตามแผน</span>'+planCell(t)+'</div><div><span class="lb">ที่มางบประมาณ</span>'+esc(t.budgetSource||'—')+'</div></div>'+refsHtml(t,links)+
     (t.desc?'<div><span class="muted">รายละเอียดงาน</span><div>'+nl(t.desc)+'</div></div>':'');
   if(ph.length){
     s+='<h3>เฟส / งานย่อย</h3><table><thead><tr><th class="n" style="width:5%">#</th><th>เฟส/งานย่อย</th><th class="n">น้ำหนัก</th><th class="n">งบประมาณ (บาท)</th><th class="n">เบิกจ่าย (บาท)</th><th class="n">งบเฟสคงเหลือ (บาท)</th><th>กำหนดแล้วเสร็จ</th><th>ความก้าวหน้า</th><th>ผลแล้วเสร็จ</th></tr></thead><tbody>'+
@@ -857,7 +864,7 @@ async function printTaskReport(ids){
   const list=ids.map(id=>S.tasks[id]&&Object.assign({id},S.tasks[id])).filter(Boolean);
   if(!list.length){toast('ไม่มีงานให้ออกรายงาน');return;}
   toast('กำลังเตรียมรายงาน…');
-  const links=await signFiles(list.flatMap(t=>reportsFor(t.id)));
+  const links=await signFiles(list.flatMap(t=>reportsFor(t.id).concat([{files:Object.values(t.refFiles||{}).flat()}])));
   const title=list.length===1?'รายงานความก้าวหน้า: '+(list[0].title||''):'รายงานความก้าวหน้างาน';
   openPrint(title,docHeader(list.length===1?'รายงานความก้าวหน้างาน':'รายงานความก้าวหน้างาน ('+list.length+' งาน)',list.length===1?(list[0].title||''):filterNote())+list.map(t=>taskReportHtml(t,links)).join('')+(sb&&Object.keys(links).length?'<p class="muted">ลิงก์เอกสารแนบในรายงานนี้ใช้ได้ '+LINK_DAYS+' วันนับจากวันที่พิมพ์ ผู้ที่ได้รับไฟล์นี้เปิดเอกสารได้ทันที</p>':'')+
     (list.length===1?'<div class="sign"><div><p>ผู้รายงาน</p></div><div><p>ผู้ตรวจสอบ / ผู้บังคับบัญชา</p></div></div>':''));
@@ -1000,7 +1007,7 @@ function phaseEditor(initial,taskId,ro){
         rows.length&&!ro?h('button',{class:'btn',type:'button',text:'แบ่งน้ำหนักเท่ากัน',onclick:()=>{const n=rows.length;const b=Math.floor(100/n);rows.forEach((p,i)=>p.weight=b+(i<100-b*n?1:0));draw();}}):null,
         rows.length?h('span',{class:'total',id:'ph-total'}):null,
         rows.length?h('span',{class:'stamp',id:'ph-budget'}):null),
-      rows.length>1?h('div',{class:'stamp',text:'เมื่อบันทึก ระบบจะเรียงเฟสตามวันที่คาดว่าจะแล้วเสร็จ'}):null);
+      rows.length>1?h('div',{class:'stamp',text:'เมื่อบันทึก ระบบจะเรียงเฟสตามวันที่คาดว่าจะแล้วเสร็จ'}):'');
     updTotal();
   };
   const updTotal=()=>{const el=wrap.querySelector('#ph-total');if(!el)return;const total=rows.reduce((s,p)=>s+(Number(p.weight)||0),0);el.textContent='รวม '+total+'%'+(total===100?' ✓':' (ต้องรวมให้ได้ 100%)');el.className='total '+(total===100?'ok':'bad');const bt=wrap.querySelector('#ph-budget');if(bt)bt.textContent='งบประมาณรวมทุกเฟส '+baht(budgetSum())+' บาท';};
@@ -1061,6 +1068,21 @@ function reportForm(t){
     h('div',null,submit));
   return f;
 }
+const REF_KINDS=[{k:'budget',field:'budgetSource',t:'1. ที่มางบประมาณ',ph:'เช่น งบลงทุนประจำปี 2569, เงินกู้, งบทำการ'},{k:'plan',field:'planRef',t:'2. แผนวิสาหกิจ',ph:'เช่น แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 2'},{k:'other',field:'otherRef',t:'3. อื่น ๆ',ph:'เอกสารหรือข้อมูลอ้างอิงอื่น'}];
+function refFilesOf(t,k){return ((t&&t.refFiles)||{})[k]||[];}
+function refBlock(t,kind,ro){
+  const txt=h('input',{id:'tk-ref-'+kind.k,value:t?t[kind.field]||'':'',maxlength:'300',disabled:ro,placeholder:kind.ph});
+  let kept=refFilesOf(t,kind.k).slice();const removed=[];
+  const list=h('div',{class:'files'});
+  const draw=()=>list.replaceChildren(...(kept.length?kept.map((f,i)=>h('div',{class:'refrow'},
+    h('a',{href:'#',class:'file',text:'📎 '+(f.name||'ไฟล์แนบ'),onclick:e=>{e.preventDefault();if(sb&&f.path)openFile(f);}}),
+    ro?null:h('button',{class:'btn ghost small',type:'button',text:'ลบไฟล์',onclick:()=>{removed.push(...kept.splice(i,1));draw();}}))):[h('span',{class:'stamp',text:'ยังไม่มีไฟล์แนบ'})]));
+  draw();
+  const pick=!ro&&S.mode==='db'?h('input',{type:'file',multiple:true,'aria-label':'แนบไฟล์ '+kind.t}):null;
+  const el=h('div',{class:'refblock'},h('label',{for:'tk-ref-'+kind.k,text:kind.t}),txt,list,
+    pick?pick:(!ro?h('span',{class:'stamp',text:'แนบไฟล์ได้เมื่อเชื่อมต่อฐานข้อมูลออนไลน์'}):null));
+  return{el,kind,text:()=>txt.value.trim(),kept:()=>kept,removed:()=>removed,picked:()=>pick?[...pick.files]:[]};
+}
 function openTask(id,tab){
   const t=id?Object.assign({id},S.tasks[id]):null;if(id&&!S.tasks[id])return;
   S.openTaskId=id||null;
@@ -1073,14 +1095,14 @@ function openTask(id,tab){
   const assigned=h('input',{id:'tk-assigned',type:'date',value:t?t.assignedDate||'':today(),disabled:ro});
   const due=h('input',{id:'tk-due',type:'date',value:t?t.due||'':'',disabled:ro});
   const budget=h('input',{id:'tk-budget',type:'number',min:'0',step:'0.01',class:'num',value:t&&t.budget?String(t.budget):'',disabled:ro,placeholder:'0'});
-  const plan=h('input',{id:'tk-plan',value:t?t.planRef||'':'',maxlength:'200',disabled:ro,placeholder:'เช่น แผนวิสาหกิจ 2569 ยุทธศาสตร์ที่ 2 (ถ้ามี)'});
+  const refs=REF_KINDS.map(k=>refBlock(t,k,ro));
   const phases=phaseEditor(t?phasesOf(t):[],t?t.id:null,ro);
   const pctNow=t?taskPct(t):0;
   const info=h('div',{class:'stackv'},
     h('div',{class:'field'},h('label',{for:'tk-title',text:'ชื่องาน'}),title),
     h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-as',text:'ผู้รับผิดชอบ'}),as),h('div',{class:'field'},h('label',{for:'tk-st',text:'สถานะ'}),st),h('div',{class:'field'},h('label',{for:'tk-pr',text:'ความสำคัญ'}),pr)),
     h('div',{class:'row'},h('div',{class:'field'},h('label',{for:'tk-assigned',text:'วันที่มอบหมาย'}),assigned),h('div',{class:'field'},h('label',{for:'tk-due',text:'วันที่คาดว่าจะแล้วเสร็จ'}),due),h('div',{class:'field'},h('label',{for:'tk-budget',text:'งบประมาณรวม (บาท) · เว้นว่างเพื่อใช้ผลรวมงบเฟส'}),budget)),
-    h('div',{class:'field'},h('label',{for:'tk-plan',text:'อ้างอิงแผนวิสาหกิจ (ถ้ามี)'}),plan),
+    h('fieldset',{class:'refs'},h('legend',{text:'ข้อมูลอ้างอิงและเอกสารแนบ'}),refs.map(r=>r.el)),
     h('div',{class:'field'},h('label',{for:'tk-desc',text:'รายละเอียดงาน'}),desc),
     h('div',{class:'field'},h('label',{text:'เฟส / งานย่อย (น้ำหนักรวมต้องเท่ากับ 100%)'}),phases.el),
     t?h('div',{class:'stamp',text:'ความก้าวหน้ารวม '+pctNow+'%'+(t.updatedAt?' · แก้ไขล่าสุด '+new Date(t.updatedAt).toLocaleString('th-TH',{dateStyle:'medium',timeStyle:'short'}):'')}):null,
@@ -1095,10 +1117,22 @@ function openTask(id,tab){
     let stv=st.value;
     if(t&&stv!=='done'&&allPhasesDone(t,ph)){stv='done';toast('ทุกเฟสแล้วเสร็จ ปิดงานให้แล้ว');}
     const now=Date.now();const data={title:v,desc:desc.value.trim(),assignee:as.value,status:stv,priority:pr.value,assignedDate:assigned.value,due:due.value,
-      budget:bud,planRef:plan.value.trim(),phases:ph,updatedAt:now,completedAt:stv==='done'?((t&&t.completedAt)||now):null};
+      budget:bud,phases:ph,updatedAt:now,completedAt:stv==='done'?((t&&t.completedAt)||now):null};
     if(!t)data.createdAt=now;
     const nid=id||uid('t');
+    const refFiles=Object.assign({},(t&&t.refFiles)||{});const gone=[];
+    for(const r of refs){
+      data[r.kind.field]=r.text();
+      const files=r.kept().slice();gone.push(...r.removed().map(f=>f.path).filter(Boolean));
+      for(const file of r.picked()){
+        if(file.size>50*1024*1024){toast('ไฟล์ '+file.name+' ใหญ่เกิน 50 MB');continue;}
+        try{files.push(await uploadFile(nid,file));}catch(err){toast('อัปโหลด '+file.name+' ไม่สำเร็จ: '+(err.message||''));}
+      }
+      refFiles[r.kind.k]=files;
+    }
+    data.refFiles=refFiles;
     const ok=await write('tasks',nid,data);
+    if(ok&&gone.length&&sb)sb.storage.from('attachments').remove(gone).catch(()=>{});
     if(ok){toast(t?'บันทึกแล้ว':'สร้างงานแล้ว · เพิ่มรายงานความก้าวหน้าได้ในแท็บรายงาน');if(t)closeModal();else openTask(nid,'reports');}
   };
   const reps=t?reportsFor(t.id):[];
