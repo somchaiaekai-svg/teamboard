@@ -59,6 +59,8 @@ main.wrap{display:flex;flex-direction:column;gap:16px;padding-block:16px 48px}
 .notice b{color:var(--warn)}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stat.click{font:inherit;color:inherit;text-align:left;cursor:pointer}.stat.click:hover{border-color:var(--ink)}.stat.click.on{border:2px solid var(--ink);padding:11px 13px}
+.kindchip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--ink);color:var(--surface);border:0;font:inherit;font-size:.85rem;cursor:pointer}
 .stat .n{font-family:var(--f-mono);font-size:1.6rem;font-variant-numeric:tabular-nums;line-height:1.2}
 .stat .l{color:var(--muted);font-size:.85rem}
 .stat.alert .n{color:var(--danger)}
@@ -203,6 +205,8 @@ td.num,th,.who span{white-space:nowrap}
   .tabs{order:3;width:100%}.tabs button{flex:1}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.export{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.export-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin-bottom:8px}.export-hd h2{margin:0;font-size:1.05rem}
+.xgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}.xcard{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.xno{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--sunk);font-weight:600}.xbody{flex:1}.xbody h3{margin:0;font-size:.95rem}.xbody p{margin:2px 0 0;color:var(--muted);font-size:.82rem}
 .rep-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.rep-tools>:first-child{flex:1 1 220px}
 </style>
 
@@ -247,7 +251,7 @@ const PRI={high:{t:'ด่วน',o:0},med:{t:'ปกติ',o:1},low:{t:'ต่
 const COLORS=['#2f6db3','#b5532f','#2f8a6a','#8a4fb3','#b3862f','#2f8fa6','#a63f6b','#5a7a2f'];
 const LS_KEY='teamboard-standalone-v1';
 const COLS=['members','tasks','reports','settings'];
-const S={members:{},tasks:{},reports:{},settings:{},view:'board',f:{q:'',m:'',p:'',o:false},mode:'loading',canWrite:true,db:null,assets:null,user:null,me:null,remOpen:true};
+const S={members:{},tasks:{},reports:{},settings:{},view:'board',f:{q:'',m:'',p:'',o:false,k:''},mode:'loading',canWrite:true,db:null,assets:null,user:null,me:null,remOpen:true};
 
 // ---------- helpers ----------
 function h(tag,attrs,...kids){
@@ -492,6 +496,9 @@ function filtered(){
     if(S.f.m&&S.f.m!=='_none'&&t.assignee!==S.f.m)return false;
     if(S.f.p&&t.priority!==S.f.p)return false;
     if(S.f.o&&!isLate(t))return false;
+    if(S.f.k==='open'&&t.status==='done')return false;
+    if(S.f.k==='done'&&t.status!=='done')return false;
+    if(S.f.k==='off'&&!planStatus(t).off)return false;
     return true;
   });
 }
@@ -567,21 +574,30 @@ function renderReminders(){
   }
   el.append(box);
 }
+const KIND_T={open:'งานที่ยังเปิดอยู่',done:'งานที่เสร็จแล้ว',off:'งานที่ไม่เป็นไปตามแผน'};
+function setKind(k){S.f.k=S.f.k===k?'':k;if(S.view==='team')S.view='reports';render();}
 function renderStats(){
   const all=taskList();const open=all.filter(t=>t.status!=='done');
   const late=open.filter(t=>planStatus(t).off).length;
   const avg=all.length?Math.round(all.reduce((s,t)=>s+taskPct(t),0)/all.length):0;
   const budget=all.reduce((s,t)=>s+(Number(t.budget)||0),0);
   const done=all.length-open.length;
+  const tile=(k,n,l,extra)=>h('button',{type:'button',class:'stat click'+(S.f.k===k?' on':'')+(extra||''),'aria-pressed':String(S.f.k===k),title:S.f.k===k?'กดอีกครั้งเพื่อแสดงทุกงาน':'กดเพื่อแสดงเฉพาะ'+KIND_T[k],onclick:()=>setKind(k)},h('span',{class:'n',text:String(n)}),h('span',{class:'l',text:l}));
   document.getElementById('stats').replaceChildren(
-    h('div',{class:'stat'},h('span',{class:'n',text:String(open.length)}),h('span',{class:'l',text:'งานที่ยังเปิดอยู่ · เสร็จ '+done})),
-    h('div',{class:'stat'+(late?' alert':'')},h('span',{class:'n',text:String(late)}),h('span',{class:'l',text:'งานที่ไม่เป็นไปตามแผน'})),
-    h('div',{class:'stat'},h('span',{class:'n',text:avg+'%'}),h('span',{class:'l',text:'ความก้าวหน้าเฉลี่ยทุกงาน'}),bar(avg)),
-    h('div',{class:'stat'},h('span',{class:'n',text:baht(budget)}),h('span',{class:'l',text:'งบประมาณรวม (บาท)'})));
+    tile('open',open.length,'งานที่ยังเปิดอยู่'),
+    tile('off',late,'งานที่ไม่เป็นไปตามแผน',late?' alert':''),
+    tile('done',done,'งานที่เสร็จแล้ว'),
+    h('div',{class:'stat'},h('span',{class:'n',text:avg+'%'}),h('span',{class:'l',text:'ความก้าวหน้าเฉลี่ย · งบรวม '+baht(budget)+' บาท'}),bar(avg)));
 }
 function renderFilters(){
-  const sel=document.getElementById('fm');const cur=S.f.m;sel.replaceChildren(h('option',{value:'',text:'ทุกคนในทีม'}),...memberList().map(m=>h('option',{value:m.id,text:m.name})),h('option',{value:'_none',text:'ยังไม่มอบหมาย'}));
-  sel.value=cur;if(sel.value!==cur){S.f.m='';sel.value='';}
+  const sel=document.getElementById('fm');const cur=S.f.m;
+  const opts=[['','ทุกคนในทีม'],...memberList().map(m=>[m.id,m.name]),['_none','ยังไม่มอบหมาย']];
+  const sig=JSON.stringify(opts);
+  if(sel.dataset.sig!==sig){sel.replaceChildren(...opts.map(([v,t])=>h('option',{value:v,text:t})));sel.dataset.sig=sig;}
+  if(sel.value!==cur)sel.value=cur;if(sel.value!==cur){S.f.m='';sel.value='';}
+  let chip=document.getElementById('fk');
+  if(S.f.k){if(!chip){chip=h('button',{id:'fk',type:'button',class:'kindchip',onclick:()=>setKind(S.f.k)});document.getElementById('filters').append(chip);}chip.textContent='แสดงเฉพาะ: '+KIND_T[S.f.k]+'  ✕';}
+  else if(chip)chip.remove();
 }
 function card(t){
   const m=S.members[t.assignee];const di=dueInfo(t.due,t.status==='done');const p=taskPct(t);
@@ -696,9 +712,14 @@ function renderReportsView(){
   const reps=Object.values(S.reports).filter(r=>ids.has(r.taskId));
   const issues=reps.filter(r=>r.issues).length;
   if(!list.length)return h('div',{class:'empty-col',text:'ไม่พบงานตามตัวกรองนี้'});
-  return h('div',{class:'stackv'},h('div',{class:'rep-tools'},h('div',{class:'stamp',text:'รายงานทั้งหมด '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),
-    h('button',{class:'btn primary small',type:'button',text:'สรุปรายงานผู้บริหาร (PDF)',onclick:printExecSummary}),
-    h('button',{class:'btn small',type:'button',text:'รายงานทุกงาน (PDF)',onclick:()=>printTaskReport(list.map(t=>t.id))})),
+  const xcard=(n,ttl,desc,btn,fn,primary)=>h('div',{class:'xcard'},h('div',{class:'xno',text:n}),h('div',{class:'xbody'},h('h3',{text:ttl}),h('p',{text:desc})),h('button',{class:'btn small'+(primary?' primary':''),type:'button',text:btn,onclick:fn}));
+  return h('div',{class:'stackv'},
+    h('section',{class:'export'},
+      h('div',{class:'export-hd'},h('h2',{text:'ออกรายงาน PDF'}),h('span',{class:'stamp',text:'ใช้งาน '+list.length+' งานตามตัวกรองที่เลือกอยู่ · '+filterNote()})),
+      h('div',{class:'xgrid'},
+        xcard('1','รายงานสรุปสำหรับผู้บริหาร','ภาพรวมสั้น ๆ: ตัวเลขสรุป งานที่ไม่เป็นไปตามแผน ตารางทุกงาน ปัญหา/อุปสรรค และสรุปรายผู้รับผิดชอบ','เปิดรายงานสรุป',printExecSummary,true),
+        xcard('2','รายงานความก้าวหน้าแต่ละงาน (ฉบับละเอียด)','หนึ่งหน้าต่องาน: ข้อมูลงาน เฟสและผลแล้วเสร็จ รายงานทุกครั้ง พร้อมลิงก์เปิดเอกสารแนบ','เปิดรายงานละเอียด',()=>printTaskReport(list.map(t=>t.id))))),
+    h('div',{class:'stamp',text:'รายงานความก้าวหน้า '+reps.length+' รายการ · มีปัญหา/อุปสรรค '+issues+' รายการ · เพิ่มรายงานได้จากหน้ารายละเอียดงาน'}),
     list.map(t=>{const m=S.members[t.assignee];const pc=taskPct(t);const di=dueInfo(t.due,t.status==='done');
       return h('article',{class:'task-rep'},
         h('div',{class:'task-rep-hd'},
@@ -740,7 +761,8 @@ tr{break-inside:avoid}thead{display:table-header-group}
 ul{margin:4px 0;padding-left:18px}
 .sign{display:flex;justify-content:space-around;margin-top:36px;text-align:center}
 .sign div{width:40%}.sign p{border-top:1px dotted #444;padding-top:4px;margin-top:40px}
-.noprint{position:fixed;top:8px;right:8px}
+.noprint{position:fixed;top:0;left:0;right:0;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:8px 12px;background:#f3f3ef;border-bottom:1px solid #ccc;font-size:10pt}
+a{color:#1f5fa8}
 .noprint button{font:inherit;padding:6px 14px;border-radius:6px;border:1px solid #1d1d1b;background:#1d1d1b;color:#fff;cursor:pointer}
 @media screen{body{max-width:1000px;margin:56px auto 32px;padding:0 16px}}
 @media print{.noprint{display:none}}`;
@@ -750,23 +772,33 @@ const pbar=p=>'<span style="white-space:nowrap"><span class="bar"><i style="widt
 function dueCell(due,done){if(!due)return '—';const di=dueInfo(due,done);return fmtDate(due,true)+(di&&di.cls?'<br><span class="'+(di.cls==='late'?'late':'soon')+'">'+esc(di.text)+'</span>':'');}
 function memberName(id){const m=S.members[id];return m?m.name:'ยังไม่มอบหมาย';}
 function nowStamp(){return new Date().toLocaleString('th-TH',{dateStyle:'long',timeStyle:'short'});}
-function filterNote(){const f=[];if(S.f.q)f.push('ค้นหา “'+S.f.q+'”');if(S.f.m)f.push('ผู้รับผิดชอบ: '+(S.f.m==='_none'?'ยังไม่มอบหมาย':memberName(S.f.m)));if(S.f.p)f.push('ความสำคัญ: '+(PRI[S.f.p]||{}).t);if(S.f.o)f.push('เฉพาะงานเกินกำหนด');return f.length?'ตัวกรอง: '+f.join(' · '):'ทุกงาน';}
+function filterNote(){const f=[];if(S.f.q)f.push('ค้นหา “'+S.f.q+'”');if(S.f.m)f.push('ผู้รับผิดชอบ: '+(S.f.m==='_none'?'ยังไม่มอบหมาย':memberName(S.f.m)));if(S.f.p)f.push('ความสำคัญ: '+(PRI[S.f.p]||{}).t);if(S.f.o)f.push('เฉพาะงานเกินกำหนด');if(S.f.k)f.push('เฉพาะ'+KIND_T[S.f.k]);return f.length?'ตัวกรอง: '+f.join(' · '):'ทุกงาน';}
 function openPrint(title,body){
-  const w=window.open('','_blank');
-  if(!w){toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ กรุณาอนุญาตป๊อปอัปสำหรับเว็บนี้');return;}
-  w.document.open();
-  w.document.write('<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+esc(title)+'</title>'+
+  // A separate tab without an opener link: printing there never freezes this page.
+  const html='<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(title)+'</title>'+
     '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@600;700&family=IBM+Plex+Sans+Thai:wght@400;600&display=swap">'+
-    '<style>'+PRINT_CSS+'</style></head><body><div class="noprint"><button onclick="window.print()">บันทึกเป็น PDF / พิมพ์</button></div>'+body+'</body></html>');
-  w.document.close();
-  const go=()=>setTimeout(()=>{try{w.focus();w.print();}catch(e){}},300);
-  if(w.document.fonts&&w.document.fonts.ready)w.document.fonts.ready.then(go);else w.onload=go;
+    '<style>'+PRINT_CSS+'</style></head><body><div class="noprint"><span>กดปุ่มนี้ แล้วเลือกปลายทาง “บันทึกเป็น PDF”</span><button onclick="window.print()">บันทึกเป็น PDF / พิมพ์</button></div>'+body+'</body></html>';
+  const url=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+  const a=h('a',{href:url,target:'_blank',rel:'noopener'});document.body.append(a);a.click();a.remove();
+  document.querySelectorAll('.toast').forEach(e=>e.remove());
+  const el=h('div',{class:'toast',role:'status'},'เปิดรายงานในแท็บใหม่แล้ว · ',h('a',{href:url,target:'_blank',rel:'noopener',style:'color:inherit;text-decoration:underline',text:'ถ้าไม่เปิด กดที่นี่'}));
+  document.body.append(el);clearTimeout(toastT);toastT=setTimeout(()=>el.remove(),6000);
+}
+// Signed links (valid 1 year) so attachments open straight from the PDF.
+const LINK_DAYS=365;
+async function signFiles(reports){
+  const paths=[...new Set(reports.flatMap(r=>(r.files||[]).map(f=>f.path).filter(Boolean)))];
+  const out={};if(!sb||!paths.length)return out;
+  try{const {data,error}=await sb.storage.from('attachments').createSignedUrls(paths,LINK_DAYS*86400);if(error)throw error;
+    (data||[]).forEach(d=>{if(d.signedUrl)out[d.path]=d.signedUrl;});}catch(e){console.warn(e);toast('สร้างลิงก์เอกสารไม่ได้: '+(e.message||e));}
+  return out;
 }
 function docHeader(title,sub){return '<div class="doc-hd"><div><h1>'+esc(title)+'</h1><div class="muted">'+esc(sub)+'</div></div><div class="muted" style="text-align:right">บอร์ดติดตามงานทีม<br>พิมพ์เมื่อ '+esc(nowStamp())+'</div></div>';}
-function taskReportHtml(t){
+function taskReportHtml(t,links){
+  links=links||{};
   const pc=taskPct(t);const ph=phasesOf(t);const reps=reportsFor(t.id);
   const byRec=(a,b)=>(a.createdAt||0)-(b.createdAt||0)||(a.date||'').localeCompare(b.date||'');
-  const files=r=>{const a=(r.files||[]).map(f=>'📎 '+esc(f.name||'ไฟล์แนบ'));if(r.link&&/^https?:\/\//i.test(r.link))a.push('🔗 '+esc(r.link));return a.length?a.join('<br>'):'—';};
+  const files=r=>{const a=(r.files||[]).map(f=>links[f.path]?'<a href="'+esc(links[f.path])+'">📎 '+esc(f.name||'ไฟล์แนบ')+'</a>':'📎 '+esc(f.name||'ไฟล์แนบ'));if(r.link&&/^https?:\/\//i.test(r.link))a.push('<a href="'+esc(r.link)+'">🔗 ลิงก์เอกสาร</a>');return a.length?a.join('<br>'):'—';};
   const repTable=list=>list.length?'<table><thead><tr><th style="width:15%">วันที่รายงาน</th><th class="n" style="width:11%">ความก้าวหน้า</th><th>รายละเอียดผลการดำเนินงาน</th><th style="width:22%">ปัญหา/อุปสรรค</th><th style="width:17%">เอกสารแนบ</th></tr></thead><tbody>'+
     list.map(r=>'<tr><td>'+fmtDate(r.date,true)+(r.createdAt?'<br><span class="muted">บันทึก '+esc(fmtStamp(r.createdAt))+'</span>':'')+'</td><td class="n">'+clampPct(r.percent)+'%</td><td>'+(nl(r.detail)||'—')+'</td><td class="'+(r.issues?'issue':'')+'">'+(nl(r.issues)||'—')+'</td><td>'+files(r)+'</td></tr>').join('')+'</tbody></table>':'<div class="muted">ยังไม่มีรายงาน</div>';
   const known=new Set(ph.map(p=>p.id));
@@ -784,11 +816,13 @@ function taskReportHtml(t){
   }else s+='<h3>รายงานความก้าวหน้า</h3>'+repTable(reps.slice().sort(byRec));
   return s+'</section>';
 }
-function printTaskReport(ids){
+async function printTaskReport(ids){
   const list=ids.map(id=>S.tasks[id]&&Object.assign({id},S.tasks[id])).filter(Boolean);
   if(!list.length){toast('ไม่มีงานให้ออกรายงาน');return;}
+  toast('กำลังเตรียมรายงาน…');
+  const links=await signFiles(list.flatMap(t=>reportsFor(t.id)));
   const title=list.length===1?'รายงานความก้าวหน้า: '+(list[0].title||''):'รายงานความก้าวหน้างาน';
-  openPrint(title,docHeader(list.length===1?'รายงานความก้าวหน้างาน':'รายงานความก้าวหน้างาน ('+list.length+' งาน)',list.length===1?(list[0].title||''):filterNote())+list.map(taskReportHtml).join('')+
+  openPrint(title,docHeader(list.length===1?'รายงานความก้าวหน้างาน':'รายงานความก้าวหน้างาน ('+list.length+' งาน)',list.length===1?(list[0].title||''):filterNote())+list.map(t=>taskReportHtml(t,links)).join('')+(sb&&Object.keys(links).length?'<p class="muted">ลิงก์เอกสารแนบในรายงานนี้ใช้ได้ '+LINK_DAYS+' วันนับจากวันที่พิมพ์ ผู้ที่ได้รับไฟล์นี้เปิดเอกสารได้ทันที</p>':'')+
     (list.length===1?'<div class="sign"><div><p>ผู้รายงาน</p></div><div><p>ผู้ตรวจสอบ / ผู้บังคับบัญชา</p></div></div>':''));
 }
 function printExecSummary(){
@@ -1027,7 +1061,7 @@ function openTask(id,tab){
     h('button',{role:'tab','aria-selected':String(tab==='reports'),type:'button',text:'รายงานความก้าวหน้า ('+reps.length+')',onclick:()=>openTask(id,'reports')})):null;
   if(t&&tab==='reports'){
     const body=h('div',{class:'stackv'},tabs,
-      h('div',{class:'rep-tools'},h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),h('button',{class:'btn small',type:'button',text:'ออกรายงาน PDF',onclick:()=>printTaskReport([t.id])})),
+      h('div',{class:'rep-tools'},h('div',{class:'pct big'},bar(pctNow),h('span',{class:'num',text:'รวม '+pctNow+'%'})),h('button',{class:'btn small',type:'button',text:'PDF รายงานงานนี้',onclick:()=>printTaskReport([t.id])})),
       phasesOf(t).length?h('div',{class:'stamp',text:'ความก้าวหน้ารวมคิดจาก น้ำหนักเฟส × % ล่าสุดของแต่ละเฟส'}):null,
       phaseSections(t,{addBtn:true}),
       ro?null:reportForm(t));
